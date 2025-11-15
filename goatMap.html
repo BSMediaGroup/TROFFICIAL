@@ -45,7 +45,7 @@
       font-family: "GemunuLibre-Regular";
       src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/GemunuLibre-Regular.otf")
         format("opentype");
-      font-weight: 400;
+      font-weight: 300;
       font-style: normal;
     }
 
@@ -82,7 +82,7 @@
     }
 
     .goat-popup {
-      font-size: 15px; /* bumped up from 12px */
+      font-size: 15px;
       color: #f5f5f5;
       font-family: "GemunuLibre-Regular", system-ui, -apple-system,
         BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -93,7 +93,7 @@
       text-decoration: none;
       font-family: "GemunuLibre-SemiBold", "GemunuLibre-Regular", system-ui,
         -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 14px; /* slightly larger link text */
+      font-size: 14px;
     }
 
     .goat-popup a:hover {
@@ -115,20 +115,21 @@
 
     /* Zoom control container */
     .leaflet-control-zoom {
-      border: 1px solid #333 !important;
+      border: 1px solid #8CC736 !important;
       box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
     }
 
     /* Zoom buttons */
     .leaflet-control-zoom a {
       background-color: #111 !important;
-      color: #f5f5f5 !important;
-      border-bottom: 1px solid #333 !important;
+      color: #8CC736 !important; /* icon/text color */
+      border-bottom: 1px solid #8CC736 !important;
     }
 
     .leaflet-control-zoom a:hover {
       background-color: #222 !important;
-      color: #ffffff !important;
+      color: #8CC736 !important;
+      border-color: #8CC736 !important;
     }
 
     /* Attribution bar */
@@ -140,7 +141,7 @@
       padding: 2px 6px !important;
       font-family: "GemunuLibre-Regular", system-ui, -apple-system,
         BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 10px;
+      font-size: 12px; /* bumped ~20% from 10px */
     }
 
     .leaflet-control-attribution a {
@@ -199,6 +200,34 @@
 
     .marker-cluster:hover div {
       transform: scale(1.08);
+    }
+
+    /* Collapsible description text */
+    .goat-desc {
+      margin-top: 2px;
+      opacity: 0.9;
+      font-family: "GemunuLibre-Regular", system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .goat-desc.expanded {
+      -webkit-line-clamp: unset;
+      max-height: none;
+    }
+
+    .goat-desc-toggle {
+      margin-top: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #8CC736;
+      font-family: "GemunuLibre-SemiBold", "GemunuLibre-Regular", system-ui,
+        -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      user-select: none;
     }
   </style>
 </head>
@@ -662,7 +691,7 @@
           attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
           subdomains: "abcd",
-          maxZoom: 6,          // match map's maxZoom to avoid blank tiles at crazy zoom
+          maxZoom: 6,
           minZoom: 2
         }
       ).addTo(map);
@@ -677,6 +706,29 @@
       });
 
       map.addLayer(markerCluster);
+
+      // Attach popup "show more" logic on open
+      map.on("popupopen", (e) => {
+        const popupEl = e.popup.getElement();
+        if (!popupEl) return;
+
+        const desc = popupEl.querySelector(".goat-desc");
+        const toggle = popupEl.querySelector(".goat-desc-toggle");
+        if (!desc || !toggle) return;
+
+        // If description doesn't overflow, hide the toggle
+        if (desc.scrollHeight <= desc.clientHeight + 1) {
+          toggle.style.display = "none";
+          return;
+        }
+
+        toggle.textContent = "Show more";
+
+        toggle.addEventListener("click", () => {
+          const expanded = desc.classList.toggle("expanded");
+          toggle.textContent = expanded ? "Show less" : "Show more";
+        });
+      });
     }
 
     function clearMarkers() {
@@ -803,21 +855,36 @@
                 }
                 ${
                   goat.subtitle
-                    ? `<div style="
-                         margin-top:2px;
-                         opacity:0.9;
-                         font-family:'GemunuLibre-Regular',system-ui,-apple-system,
-                           BlinkMacSystemFont,'Segoe UI',sans-serif;
-                       ">
+                    ? `<div class="goat-desc">
                          ${escapeHtml(goat.subtitle)}
-                       </div>`
+                       </div>
+                       <div class="goat-desc-toggle"></div>`
                     : ""
                 }
                 ${
                   linkHref
                     ? `<div style="margin-top:6px;">
                          <a href="${linkHref}" target="_blank" rel="noopener noreferrer">
-                           View goat page
+                           <span style="display:inline-flex;align-items:center;gap:4px;">
+                             <svg
+                               xmlns="http://www.w3.org/2000/svg"
+                               viewBox="0 0 16 16"
+                               width="14"
+                               height="14"
+                               aria-hidden="true"
+                               focusable="false"
+                               style="display:block;"
+                             >
+                               <circle cx="5" cy="11" r="2.2" fill="currentColor" />
+                               <circle cx="11" cy="5" r="2.2" fill="currentColor" />
+                               <line x1="6.6" y1="9.4" x2="9.4" y2="6.6"
+                                 stroke="currentColor"
+                                 stroke-width="1.6"
+                                 stroke-linecap="round"
+                               />
+                             </svg>
+                             <span>View GOAT listing</span>
+                           </span>
                          </a>
                        </div>`
                     : ""
@@ -831,7 +898,6 @@
           popupHtml
         );
 
-        // No hover scaling, no click animation – just add to cluster
         markerCluster.addLayer(marker);
         markers.push(marker);
         bounds.push([lat, lng]);
