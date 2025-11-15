@@ -49,7 +49,7 @@
       text-decoration: underline;
     }
 
-    /* Dark theme for Leaflet popup background */
+    /* Dark theme popups */
     .leaflet-popup-content-wrapper {
       background-color: #111;
       color: #f5f5f5;
@@ -88,12 +88,11 @@
         worldCopyJump: true
       }).setView([20, 0], 2);
 
-      // Dark basemap with minimal labels
       L.tileLayer(
         "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
         {
           attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            '&copy; OpenStreetMap contributors &copy; CARTO',
           subdomains: "abcd",
           maxZoom: 19
         }
@@ -107,32 +106,21 @@
 
     function addGoatMarkers(goats) {
       console.log('[GoatMap] addGoatMarkers called with', goats);
-      if (!map) {
-        initMap();
-      }
+      if (!map) initMap();
 
       clearMarkers();
 
-      if (!goats || !goats.length) {
-        console.warn('[GoatMap] No goat locations to display.');
-        return;
-      }
+      if (!goats || !goats.length) return;
 
       const bounds = [];
 
       goats.forEach((goat) => {
         if (!goat) return;
 
-        let lat = goat.lat;
-        let lng = goat.lng;
+        let lat = Number(goat.lat);
+        let lng = Number(goat.lng);
 
-        lat = typeof lat === 'number' ? lat : Number(lat);
-        lng = typeof lng === 'number' ? lng : Number(lng);
-
-        if (!isFinite(lat) || !isFinite(lng)) {
-          console.warn('[GoatMap] Skipping goat with invalid coords:', goat);
-          return;
-        }
+        if (!isFinite(lat) || !isFinite(lng)) return;
 
         let markerIcon = defaultIcon;
         if (goat.iconUrl && goat.iconUrl.length > 5) {
@@ -151,18 +139,16 @@
           goat.country ? escapeHtml(goat.country) : ""
         ].filter(Boolean).join(", ");
 
-        // Optional country flag – only if country looks like a 2-letter code
         let flagImgHtml = "";
-        if (goat.country && typeof goat.country === "string" && goat.country.length === 2) {
+        if (goat.country && goat.country.length === 2) {
           const code = goat.country.toLowerCase();
-          const flagUrl = `https://flagcdn.com/24x18/${code}.png`;
-          flagImgHtml = `<img src="${flagUrl}" alt="${escapeHtml(goat.country)} flag"
-                              style="width:18px;height:13px;object-fit:cover;border-radius:2px;margin-left:4px;flex-shrink:0;" />`;
+          flagImgHtml =
+            `<img src="https://flagcdn.com/24x18/${code}.png"
+                  style="width:18px;height:13px;border-radius:2px;margin-left:4px;" />`;
         }
 
-        // Build absolute URL for the goat page
         let linkHref = goat.link || "";
-        if (linkHref && linkHref.startsWith("/")) {
+        if (linkHref.startsWith("/")) {
           linkHref = SITE_BASE_URL + linkHref;
         }
 
@@ -172,11 +158,11 @@
               ${
                 goat.photo
                   ? `<img src="${goat.photo}" alt="${escapeHtml(name)}"
-                        style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;" />`
+                        style="width:100px;height:100px;object-fit:cover;border-radius:6px;flex-shrink:0;" />`
                   : ""
               }
               <div style="max-width:220px;">
-                <div style="font-weight:600;margin-bottom:2px;">
+                <div style="font-weight:600;font-size:18px;margin-bottom:2px;">
                   ${escapeHtml(name)}
                 </div>
                 ${
@@ -189,9 +175,7 @@
                 }
                 ${
                   goat.subtitle
-                    ? `<div style="margin-top:2px;opacity:0.9;">
-                         ${escapeHtml(goat.subtitle)}
-                       </div>`
+                    ? `<div style="margin-top:2px;opacity:0.9;">${escapeHtml(goat.subtitle)}</div>`
                     : ""
                 }
                 ${
@@ -216,38 +200,29 @@
         bounds.push([lat, lng]);
       });
 
-      if (bounds.length === 1) {
-        map.setView(bounds[0], 5);
-      } else if (bounds.length > 1) {
-        map.fitBounds(bounds, { padding: [40, 40] });
-      }
+      if (bounds.length === 1) map.setView(bounds[0], 5);
+      else if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40] });
     }
 
-    // Listen for messages from Wix
     window.addEventListener("message", (event) => {
       try {
-        console.log('[GoatMap] message event from parent:', event.origin, event.data);
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
         if (!data || data.type !== "GOAT_LOCATIONS") return;
 
-        const goats = Array.isArray(data.payload) ? data.payload : [];
-        addGoatMarkers(goats);
+        addGoatMarkers(data.payload || []);
       } catch (e) {
-        console.error('[GoatMap] Error handling message from parent:', e);
+        console.error('[GoatMap] Error handling message:', e);
       }
     });
 
-    // init empty dark map immediately
     initMap();
 
     function escapeHtml(str) {
       if (!str || typeof str !== "string") return "";
       return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
   </script>
