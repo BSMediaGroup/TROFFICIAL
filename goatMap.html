@@ -18,6 +18,19 @@
     crossorigin=""
   ></script>
 
+  <!-- MarkerCluster plugin (for overlapping markers / clustering) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+  />
+  <script
+    src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+  ></script>
+
   <style>
     html, body {
       margin: 0;
@@ -59,6 +72,58 @@
     .leaflet-popup-tip {
       background-color: #111;
     }
+
+    /* Marker hover + bounce */
+    .leaflet-marker-icon.goat-hover {
+      transform: scale(1.12);
+      transform-origin: center bottom;
+    }
+
+    @keyframes goat-bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(-8px);
+      }
+      60% {
+        transform: translateY(-4px);
+      }
+    }
+
+    .leaflet-marker-icon.goat-bounce {
+      animation: goat-bounce 0.5s ease-out;
+      transform-origin: center bottom;
+    }
+
+    /* Marker cluster styling (gold circle + black centre, gold text) */
+    .marker-cluster-small,
+    .marker-cluster-medium,
+    .marker-cluster-large {
+      background-color: rgba(243, 174, 0, 0.85);
+    }
+
+    .marker-cluster div {
+      background-color: #000;
+      border-radius: 50%;
+      border: 2px solid #f3ae00;
+      color: #f3ae00;
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 32px;
+      width: 32px;
+      height: 32px;
+      text-align: center;
+      box-shadow: 0 0 6px rgba(0,0,0,0.6);
+    }
+
+    .marker-cluster span {
+      line-height: 32px;
+    }
+
+    .marker-cluster:hover div {
+      transform: scale(1.08);
+    }
   </style>
 </head>
 <body>
@@ -71,6 +136,21 @@
 
     const SITE_BASE_URL = "https://www.thirdrailify.com";
 
+    // Map country codes to full names when we only get initialisms
+    const COUNTRY_NAMES = {
+      US: "United States",
+      USA: "United States",
+      GB: "United Kingdom",
+      UK: "United Kingdom",
+      CA: "Canada",
+      AU: "Australia",
+      NZ: "New Zealand",
+      IE: "Ireland",
+      DE: "Germany",
+      FR: "France"
+      // add more as needed
+    };
+
     const defaultIcon = L.icon({
       iconUrl: DEFAULT_GOAT_ICON_URL,
       iconSize: [32, 32],
@@ -79,10 +159,11 @@
     });
 
     let map;
+    let markerCluster;
     let markers = [];
 
     function initMap() {
-      console.log('[GoatMap] Initialising Leaflet map...');
+      console.log("[GoatMap] Initialising Leaflet map...");
       map = L.map("map", {
         zoomControl: true,
         worldCopyJump: true
@@ -92,36 +173,66 @@
         "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
         {
           attribution:
-            '&copy; OpenStreetMap contributors &copy; CARTO',
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
           subdomains: "abcd",
           maxZoom: 19
         }
       ).addTo(map);
+
+      // Cluster group to handle overlapping markers + zoom-level clusters
+      markerCluster = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        spiderfyOnEveryZoom: false,
+        spiderfyOnMaxZoom: true,
+        zoomToBoundsOnClick: true,
+        maxClusterRadius: 60
+      });
+
+      map.addLayer(markerCluster);
     }
 
     function clearMarkers() {
-      markers.forEach((m) => map.removeLayer(m));
+      if (markerCluster) {
+        markerCluster.clearLayers();
+      }
       markers = [];
     }
 
+    // Round coordinates so we effectively only show city-ish precision
+    function quantizeCoord(value, decimals = 2) {
+      let num = typeof value === "number" ? value : Number(value);
+      if (!isFinite(num)) return value;
+      const factor = Math.pow(10, decimals);
+      return Math.round(num * factor) / factor;
+    }
+
     function addGoatMarkers(goats) {
-      console.log('[GoatMap] addGoatMarkers called with', goats);
-      if (!map) initMap();
+      console.log("[GoatMap] addGoatMarkers called with", goats);
+      if (!map) {
+        initMap();
+      }
 
       clearMarkers();
 
-      if (!goats || !goats.length) return;
+      if (!goats || !goats.length) {
+        console.warn("[GoatMap] No goat locations to display.");
+        return;
+      }
 
       const bounds = [];
 
       goats.forEach((goat) => {
         if (!goat) return;
 
-        let lat = Number(goat.lat);
-        let lng = Number(goat.lng);
+        let lat = quantizeCoord(goat.lat, 2);
+        let lng = quantizeCoord(goat.lng, 2);
 
-        if (!isFinite(lat) || !isFinite(lng)) return;
+        if (!isFinite(lat) || !isFinite(lng)) {
+          console.warn("[GoatMap] Skipping goat with invalid coords:", goat);
+          return;
+        }
 
+        // Per-goat icon (if ever used)
         let markerIcon = defaultIcon;
         if (goat.iconUrl && goat.iconUrl.length > 5) {
           markerIcon = L.icon({
@@ -134,19 +245,33 @@
 
         const name = goat.uploaderName || goat.title || "GOAT in the Wild";
 
-        const locationText = [
-          goat.city ? escapeHtml(goat.city) : "",
-          goat.country ? escapeHtml(goat.country) : ""
-        ].filter(Boolean).join(", ");
-
-        let flagImgHtml = "";
-        if (goat.country && goat.country.length === 2) {
-          const code = goat.country.toLowerCase();
-          flagImgHtml =
-            `<img src="https://flagcdn.com/24x18/${code}.png"
-                  style="width:18px;height:13px;border-radius:2px;margin-left:4px;" />`;
+        // Expand country names if we were given a code
+        const rawCountry = goat.country || "";
+        let countryText = rawCountry;
+        if (rawCountry && rawCountry.length <= 3) {
+          const upper = rawCountry.toUpperCase();
+          countryText = COUNTRY_NAMES[upper] || rawCountry;
         }
 
+        const locationText = [
+          goat.city ? escapeHtml(goat.city) : "",
+          countryText ? escapeHtml(countryText) : ""
+        ]
+          .filter(Boolean)
+          .join(", ");
+
+        // Flag: only if the original was a 2-letter code
+        let flagImgHtml = "";
+        if (rawCountry && rawCountry.length === 2) {
+          const code = rawCountry.toLowerCase();
+          const flagUrl = `https://flagcdn.com/24x18/${code}.png`;
+          flagImgHtml = `<img src="${flagUrl}" alt="${escapeHtml(
+            countryText
+          )} flag"
+                              style="width:18px;height:13px;object-fit:cover;border-radius:2px;margin-left:4px;flex-shrink:0;" />`;
+        }
+
+        // Build absolute page link
         let linkHref = goat.link || "";
         if (linkHref.startsWith("/")) {
           linkHref = SITE_BASE_URL + linkHref;
@@ -175,7 +300,9 @@
                 }
                 ${
                   goat.subtitle
-                    ? `<div style="margin-top:2px;opacity:0.9;">${escapeHtml(goat.subtitle)}</div>`
+                    ? `<div style="margin-top:2px;opacity:0.9;">
+                         ${escapeHtml(goat.subtitle)}
+                       </div>`
                     : ""
                 }
                 ${
@@ -192,37 +319,69 @@
           </div>
         `;
 
-        const marker = L.marker([lat, lng], { icon: markerIcon })
-          .addTo(map)
-          .bindPopup(popupHtml);
+        const marker = L.marker([lat, lng], { icon: markerIcon }).bindPopup(
+          popupHtml
+        );
 
+        // Hover scale
+        marker.on("mouseover", () => {
+          const el = marker.getElement();
+          if (el) el.classList.add("goat-hover");
+        });
+        marker.on("mouseout", () => {
+          const el = marker.getElement();
+          if (el) el.classList.remove("goat-hover");
+        });
+
+        // Bounce when popup opens
+        marker.on("popupopen", () => {
+          const el = marker.getElement();
+          if (el) {
+            el.classList.add("goat-bounce");
+            // Remove class after animation so repeated opens re-trigger
+            setTimeout(() => {
+              el.classList.remove("goat-bounce");
+            }, 550);
+          }
+        });
+
+        markerCluster.addLayer(marker);
         markers.push(marker);
         bounds.push([lat, lng]);
       });
 
-      if (bounds.length === 1) map.setView(bounds[0], 5);
-      else if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40] });
+      if (bounds.length === 1) {
+        map.setView(bounds[0], 5);
+      } else if (bounds.length > 1) {
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
     }
 
+    // Listen for messages from Wix (parent)
     window.addEventListener("message", (event) => {
       try {
+        console.log("[GoatMap] message event from parent:", event.origin, event.data);
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
         if (!data || data.type !== "GOAT_LOCATIONS") return;
 
-        addGoatMarkers(data.payload || []);
+        const goats = Array.isArray(data.payload) ? data.payload : [];
+        addGoatMarkers(goats);
       } catch (e) {
-        console.error('[GoatMap] Error handling message:', e);
+        console.error("[GoatMap] Error handling message from parent:", e);
       }
     });
 
+    // init empty dark map immediately
     initMap();
 
     function escapeHtml(str) {
       if (!str || typeof str !== "string") return "";
       return str
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
   </script>
