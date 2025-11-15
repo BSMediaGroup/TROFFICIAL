@@ -55,11 +55,9 @@
 
   <script>
     // ===== CONFIG =====
-    // Use PNG first for max compatibility; once markers show,
-    // you can swap to your SVG if you like.
     const DEFAULT_GOAT_ICON_URL =
-      "https://static.wixstatic.com/media/691d3d_eabcc4ce00284d36a4e26c1f99e2de84~mv2.png";
-    // SVG version (optional once things work):
+      "https://static.wixstatic.com/shapes/691d3d_aff2f307292048489b5fed6691eb63a1.svg";
+    // Once markers show and you're happy, you *can* swap that line to your SVG URL if you want:
     // "https://static.wixstatic.com/shapes/691d3d_aff2f307292048489b5fed6691eb63a1.svg";
 
     const defaultIcon = L.icon({
@@ -73,6 +71,7 @@
     let markers = [];
 
     function initMap() {
+      console.log('[GoatMap] Initialising Leaflet map...');
       map = L.map("map", {
         zoomControl: true,
         worldCopyJump: true
@@ -96,36 +95,34 @@
     }
 
     function addGoatMarkers(goats) {
+      console.log('[GoatMap] addGoatMarkers called with', goats);
       if (!map) {
         initMap();
       }
 
-      console.log("[GoatMap] addGoatMarkers called with", goats);
-
       clearMarkers();
 
       if (!goats || !goats.length) {
-        console.warn("[GoatMap] No goat locations to display");
+        console.warn('[GoatMap] No goat locations to display.');
         return;
       }
 
       const bounds = [];
 
       goats.forEach((goat) => {
-        if (goat == null) return;
+        if (!goat) return;
 
         let lat = goat.lat;
         let lng = goat.lng;
 
-        lat = typeof lat === "number" ? lat : Number(lat);
-        lng = typeof lng === "number" ? lng : Number(lng);
+        lat = typeof lat === 'number' ? lat : Number(lat);
+        lng = typeof lng === 'number' ? lng : Number(lng);
 
         if (!isFinite(lat) || !isFinite(lng)) {
-          console.warn("[GoatMap] Skipping goat with invalid coords:", goat);
+          console.warn('[GoatMap] Skipping goat with invalid coords:', goat);
           return;
         }
 
-        // per-goat icon if provided from CMS
         let markerIcon = defaultIcon;
         if (goat.iconUrl && goat.iconUrl.length > 5) {
           markerIcon = L.icon({
@@ -172,8 +169,7 @@
     // Listen for messages from Wix
     window.addEventListener("message", (event) => {
       try {
-        console.log("[GoatMap] message event from parent:", event.origin, event.data);
-
+        console.log('[GoatMap] message event from parent:', event.origin, event.data);
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
         if (!data || data.type !== "GOAT_LOCATIONS") return;
@@ -181,7 +177,7 @@
         const goats = Array.isArray(data.payload) ? data.payload : [];
         addGoatMarkers(goats);
       } catch (e) {
-        console.error("Error handling message from parent:", e);
+        console.error('[GoatMap] Error handling message from parent:', e);
       }
     });
 
@@ -193,7 +189,7 @@
       return str
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
+        .replace(/>/g, "&quot;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
