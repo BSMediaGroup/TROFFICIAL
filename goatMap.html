@@ -2,15 +2,21 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Goats in the Wild Map</title>
+  <title>GOATS in the Wild Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- MapLibre (open-source Mapbox GL) -->
+  <!-- Leaflet CSS & JS -->
   <link
-    href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css"
     rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
   />
-  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
 
   <style>
     html, body {
@@ -29,36 +35,17 @@
       height: 100%;
     }
 
-    /* Goat pin icon */
-    .goat-marker {
-      width: 32px;
-      height: 32px;
-      background-image: url("https://static.wixstatic.com/shapes/691d3d_aff2f307292048489b5fed6691eb63a1.svg");
-      background-size: contain;
-      background-position: center;
-      background-repeat: no-repeat;
-      cursor: pointer;
-    }
-
-    .mapboxgl-popup {
-      max-width: 260px !important;
+    .goat-popup {
       font-size: 12px;
-    }
-
-    .mapboxgl-popup-content {
-      background: #12131a;
       color: #f5f5f5;
-      border-radius: 6px;
-      border: 1px solid #2c2f3b;
-      padding: 8px 10px;
     }
 
-    .mapboxgl-popup-content a {
+    .goat-popup a {
       color: #66c2ff;
       text-decoration: none;
     }
 
-    .mapboxgl-popup-content a:hover {
+    .goat-popup a:hover {
       text-decoration: underline;
     }
   </style>
@@ -67,77 +54,74 @@
   <div id="map"></div>
 
   <script>
-    // --- CONFIG ---
-    // Dark-ish basemap style (vector tiles) from OpenFreeMap / OpenMapTiles
-    // This "liberty" style is a clean, general-purpose map. Later you can
-    // switch to a fully dark custom style if you want to go harder.
-    const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+    // ===== CONFIG =====
+    // default global goat icon (used if CMS doesn't provide one)
+    const DEFAULT_GOAT_ICON_URL =
+      "https://static.wixstatic.com/shapes/691d3d_aff2f307292048489b5fed6691eb63a1.svg"; // TODO: replace with your actual goat pin
+
+    const defaultIcon = L.icon({
+      iconUrl: DEFAULT_GOAT_ICON_URL,
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -28]
+    });
 
     let map;
     let markers = [];
 
-    function initMap(center) {
-      const initialCenter = center || [0, 20]; // [lng, lat]
-      const initialZoom = 2;
+    function initMap() {
+      map = L.map("map", {
+        zoomControl: true,
+        worldCopyJump: true
+      }).setView([20, 0], 2);
 
-      map = new maplibregl.Map({
-        container: "map",
-        style: MAP_STYLE_URL,
-        center: initialCenter,
-        zoom: initialZoom,
-      });
-
-      // Optional: disable rotation if you want a cleaner UX
-      map.dragRotate.disable();
-      map.touchZoomRotate.disableRotation();
-
-      // Add zoom controls (can remove if you want ultraminimal)
-      map.addControl(new maplibregl.NavigationControl(), "bottom-right");
+      // Dark basemap with minimal labels
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          subdomains: "abcd",
+          maxZoom: 19
+        }
+      ).addTo(map);
     }
 
     function clearMarkers() {
-      markers.forEach((m) => m.remove());
+      markers.forEach((m) => map.removeLayer(m));
       markers = [];
     }
 
     function addGoatMarkers(goats) {
       if (!map) {
-        // If map not initialised yet, start it around first goat
-        const first = goats && goats.length
-          ? [goats[0].lng, goats[0].lat]
-          : [0, 20];
-        initMap(first);
-
-        map.on("load", () => {
-          actuallyAddMarkers(goats);
-        });
-      } else if (!map.loaded()) {
-        map.on("load", () => {
-          actuallyAddMarkers(goats);
-        });
-      } else {
-        actuallyAddMarkers(goats);
+        initMap();
       }
-    }
 
-    function actuallyAddMarkers(goats) {
       clearMarkers();
 
       if (!goats || !goats.length) return;
 
-      const bounds = new maplibregl.LngLatBounds();
+      const bounds = [];
 
       goats.forEach((goat) => {
         if (typeof goat.lat !== "number" || typeof goat.lng !== "number") {
           return;
         }
 
-        const el = document.createElement("div");
-        el.className = "goat-marker";
+        // per-goat icon if provided from CMS
+        let markerIcon = defaultIcon;
+        if (goat.iconUrl && goat.iconUrl.length > 5) {
+          markerIcon = L.icon({
+            iconUrl: goat.iconUrl,
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -28]
+          });
+        }
 
         const popupHtml = `
-          <div>
-            <strong>${escapeHtml(goat.title || "Goat in the Wild")}</strong><br/>
+          <div class="goat-popup">
+            <strong>${escapeHtml(goat.title || "GOAT in the Wild")}</strong><br/>
             ${goat.city ? escapeHtml(goat.city) + ", " : ""}
             ${goat.country ? escapeHtml(goat.country) : ""}<br/>
             ${
@@ -153,33 +137,22 @@
           </div>
         `;
 
-        const popup = new maplibregl.Popup({ offset: 24 }).setHTML(popupHtml);
-
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([goat.lng, goat.lat])
-          .setPopup(popup)
-          .addTo(map);
+        const marker = L.marker([goat.lat, goat.lng], { icon: markerIcon })
+          .addTo(map)
+          .bindPopup(popupHtml);
 
         markers.push(marker);
-        bounds.extend([goat.lng, goat.lat]);
+        bounds.push([goat.lat, goat.lng]);
       });
 
-      if (goats.length === 1) {
-        map.flyTo({
-          center: [goats[0].lng, goats[0].lat],
-          zoom: 5,
-          essential: true,
-        });
-      } else {
-        map.fitBounds(bounds, {
-          padding: 40,
-          maxZoom: 4.5,
-          duration: 1000,
-        });
+      if (bounds.length === 1) {
+        map.setView(bounds[0], 5);
+      } else if (bounds.length > 1) {
+        map.fitBounds(bounds, { padding: [40, 40] });
       }
     }
 
-    // Receive data from Wix page
+    // Listen for messages from Wix
     window.addEventListener("message", (event) => {
       try {
         const data =
@@ -193,10 +166,9 @@
       }
     });
 
-    // Init empty map so there’s no blank area before data arrives
+    // init empty dark map immediately
     initMap();
 
-    // Simple HTML escape to avoid XSS from CMS
     function escapeHtml(str) {
       if (!str || typeof str !== "string") return "";
       return str
