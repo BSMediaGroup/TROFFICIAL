@@ -73,21 +73,16 @@
       background-color: #111;
     }
 
-    /* Marker hover + bounce */
-    .leaflet-marker-icon.goat-hover {
-      transform: scale(1.12);
-      transform-origin: center bottom;
-    }
-
+    /* Marker bounce (using margin-top so we don't override Leaflet's transform) */
     @keyframes goat-bounce {
       0%, 20%, 50%, 80%, 100% {
-        transform: translateY(0);
+        margin-top: 0;
       }
       40% {
-        transform: translateY(-8px);
+        margin-top: -8px;
       }
       60% {
-        transform: translateY(-4px);
+        margin-top: -4px;
       }
     }
 
@@ -164,9 +159,12 @@
 
     function initMap() {
       console.log("[GoatMap] Initialising Leaflet map...");
+
       map = L.map("map", {
         zoomControl: true,
-        worldCopyJump: true
+        worldCopyJump: true,
+        maxBounds: [[-85, -180], [85, 180]],   // restrict vertical panning to map extents
+        maxBoundsViscosity: 1.0                // "rubber band" at the edges
       }).setView([20, 0], 2);
 
       L.tileLayer(
@@ -323,17 +321,7 @@
           popupHtml
         );
 
-        // Hover scale
-        marker.on("mouseover", () => {
-          const el = marker.getElement();
-          if (el) el.classList.add("goat-hover");
-        });
-        marker.on("mouseout", () => {
-          const el = marker.getElement();
-          if (el) el.classList.remove("goat-hover");
-        });
-
-        // Bounce when popup opens
+        // Bounce when popup opens (no hover scaling)
         marker.on("popupopen", () => {
           const el = marker.getElement();
           if (el) {
