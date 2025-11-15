@@ -57,8 +57,6 @@
     // ===== CONFIG =====
     const DEFAULT_GOAT_ICON_URL =
       "https://static.wixstatic.com/shapes/691d3d_aff2f307292048489b5fed6691eb63a1.svg";
-    // Once markers show and you're happy, you *can* swap that line to your SVG URL if you want:
-    // "https://static.wixstatic.com/shapes/691d3d_aff2f307292048489b5fed6691eb63a1.svg";
 
     const defaultIcon = L.icon({
       iconUrl: DEFAULT_GOAT_ICON_URL,
@@ -133,21 +131,48 @@
           });
         }
 
+        const name = goat.uploaderName || goat.title || "GOAT in the Wild";
+
+        // Full location string (from Velo), fallback to city/country if missing
+        let locationLine = '';
+        if (goat.locationText && goat.locationText.length) {
+          locationLine = escapeHtml(goat.locationText);
+        } else {
+          const parts = [];
+          if (goat.city) parts.push(escapeHtml(goat.city));
+          if (goat.country) parts.push(escapeHtml(goat.country));
+          locationLine = parts.join(', ');
+        }
+
         const popupHtml = `
           <div class="goat-popup">
-            <strong>${escapeHtml(goat.title || "GOAT in the Wild")}</strong><br/>
-            ${goat.city ? escapeHtml(goat.city) + ", " : ""}
-            ${goat.country ? escapeHtml(goat.country) : ""}<br/>
-            ${
-              goat.subtitle
-                ? `<div style="margin-top:4px;">${escapeHtml(goat.subtitle)}</div>`
-                : ""
-            }
-            ${
-              goat.link
-                ? `<div style="margin-top:6px;"><a href="${goat.link}" target="_blank" rel="noopener noreferrer">View goat page</a></div>`
-                : ""
-            }
+            <div style="display:flex; gap:8px; align-items:flex-start;">
+              ${
+                goat.photo
+                  ? `<img src="${goat.photo}" alt="${escapeHtml(name)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;" />`
+                  : ""
+              }
+              <div style="max-width:220px;">
+                <div style="font-weight:600;margin-bottom:2px;">
+                  ${escapeHtml(name)}
+                </div>
+                ${
+                  locationLine
+                    ? `<div style="font-size:11px;opacity:0.85;margin-bottom:3px;">${locationLine}</div>`
+                    : ""
+                }
+                ${
+                  goat.subtitle
+                    ? `<div style="margin-top:2px;opacity:0.9;">${escapeHtml(goat.subtitle)}</div>`
+                    : ""
+                }
+                ${
+                  goat.link
+                    ? `<div style="margin-top:6px;"><a href="${goat.link}" target="_blank" rel="noopener noreferrer">View goat page</a></div>`
+                    : ""
+                }
+              </div>
+            </div>
           </div>
         `;
 
@@ -189,7 +214,7 @@
       return str
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&quot;")
+        .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
