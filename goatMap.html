@@ -55,9 +55,12 @@
 
   <script>
     // ===== CONFIG =====
-    // default global goat icon (used if CMS doesn't provide one)
+    // Use PNG first for max compatibility; once markers show,
+    // you can swap to your SVG if you like.
     const DEFAULT_GOAT_ICON_URL =
       "https://static.wixstatic.com/media/691d3d_eabcc4ce00284d36a4e26c1f99e2de84~mv2.png";
+    // SVG version (optional once things work):
+    // "https://static.wixstatic.com/shapes/691d3d_aff2f307292048489b5fed6691eb63a1.svg";
 
     const defaultIcon = L.icon({
       iconUrl: DEFAULT_GOAT_ICON_URL,
@@ -70,7 +73,6 @@
     let markers = [];
 
     function initMap() {
-      console.log("Initialising Leaflet map...");
       map = L.map("map", {
         zoomControl: true,
         worldCopyJump: true
@@ -94,24 +96,32 @@
     }
 
     function addGoatMarkers(goats) {
-      console.log("addGoatMarkers called with", goats ? goats.length : 0, "goats");
       if (!map) {
         initMap();
       }
 
+      console.log("[GoatMap] addGoatMarkers called with", goats);
+
       clearMarkers();
 
       if (!goats || !goats.length) {
-        console.log("No goats to render on map.");
+        console.warn("[GoatMap] No goat locations to display");
         return;
       }
 
       const bounds = [];
 
-      goats.forEach((goat, idx) => {
-        console.log("Processing goat", idx, goat);
-        if (typeof goat.lat !== "number" || typeof goat.lng !== "number") {
-          console.warn("Skipping goat with invalid lat/lng:", goat);
+      goats.forEach((goat) => {
+        if (goat == null) return;
+
+        let lat = goat.lat;
+        let lng = goat.lng;
+
+        lat = typeof lat === "number" ? lat : Number(lat);
+        lng = typeof lng === "number" ? lng : Number(lng);
+
+        if (!isFinite(lat) || !isFinite(lng)) {
+          console.warn("[GoatMap] Skipping goat with invalid coords:", goat);
           return;
         }
 
@@ -144,12 +154,12 @@
           </div>
         `;
 
-        const marker = L.marker([goat.lat, goat.lng], { icon: markerIcon })
+        const marker = L.marker([lat, lng], { icon: markerIcon })
           .addTo(map)
           .bindPopup(popupHtml);
 
         markers.push(marker);
-        bounds.push([goat.lat, goat.lng]);
+        bounds.push([lat, lng]);
       });
 
       if (bounds.length === 1) {
@@ -162,19 +172,13 @@
     // Listen for messages from Wix
     window.addEventListener("message", (event) => {
       try {
-        console.log("Raw postMessage data from parent:", event.data);
+        console.log("[GoatMap] message event from parent:", event.origin, event.data);
 
         const data =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        console.log("Parsed postMessage data:", data);
-
-        if (!data || data.type !== "GOAT_LOCATIONS") {
-          return;
-        }
+        if (!data || data.type !== "GOAT_LOCATIONS") return;
 
         const goats = Array.isArray(data.payload) ? data.payload : [];
-        console.log("Goats received by map:", goats);
-
         addGoatMarkers(goats);
       } catch (e) {
         console.error("Error handling message from parent:", e);
