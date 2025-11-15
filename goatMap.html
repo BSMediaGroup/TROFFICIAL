@@ -146,10 +146,19 @@
 
         const name = goat.uploaderName || goat.title || "GOAT in the Wild";
 
-        const locationLine = [
+        const locationText = [
           goat.city ? escapeHtml(goat.city) : "",
           goat.country ? escapeHtml(goat.country) : ""
         ].filter(Boolean).join(", ");
+
+        // Optional country flag – only if country looks like a 2-letter code
+        let flagImgHtml = "";
+        if (goat.country && typeof goat.country === "string" && goat.country.length === 2) {
+          const code = goat.country.toLowerCase();
+          const flagUrl = `https://flagcdn.com/24x18/${code}.png`;
+          flagImgHtml = `<img src="${flagUrl}" alt="${escapeHtml(goat.country)} flag"
+                              style="width:18px;height:13px;object-fit:cover;border-radius:2px;margin-left:4px;flex-shrink:0;" />`;
+        }
 
         // Build absolute URL for the goat page
         let linkHref = goat.link || "";
@@ -171,9 +180,10 @@
                   ${escapeHtml(name)}
                 </div>
                 ${
-                  locationLine
-                    ? `<div style="font-size:11px;opacity:0.85;margin-bottom:3px;">
-                         ${locationLine}
+                  locationText
+                    ? `<div style="font-size:11px;opacity:0.85;margin-bottom:3px;display:flex;align-items:center;gap:4px;">
+                         <span>${locationText}</span>
+                         ${flagImgHtml}
                        </div>`
                     : ""
                 }
