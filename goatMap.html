@@ -32,6 +32,39 @@
   ></script>
 
   <style>
+    /* ---------- Custom fonts from your GitHub repo ---------- */
+    @font-face {
+      font-family: "American Captain";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/American%20Captain.otf")
+        format("opentype");
+      font-weight: 400;
+      font-style: normal;
+    }
+
+    @font-face {
+      font-family: "GemunuLibre-Regular";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/GemunuLibre-Regular.otf")
+        format("opentype");
+      font-weight: 400;
+      font-style: normal;
+    }
+
+    @font-face {
+      font-family: "GemunuLibre-SemiBold";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/GemunuLibre-SemiBold.otf")
+        format("opentype");
+      font-weight: 600;
+      font-style: normal;
+    }
+
+    @font-face {
+      font-family: "GemunuLibre-ExtraBold";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/GemunuLibre-ExtraBold.otf")
+        format("opentype");
+      font-weight: 800;
+      font-style: normal;
+    }
+
     html, body {
       margin: 0;
       padding: 0;
@@ -39,8 +72,8 @@
       width: 100%;
       background: #05060a;
       overflow: hidden;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
+      font-family: "GemunuLibre-Regular", system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     #map {
@@ -51,11 +84,15 @@
     .goat-popup {
       font-size: 12px;
       color: #f5f5f5;
+      font-family: "GemunuLibre-Regular", system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     .goat-popup a {
-      color: #66c2ff;
+      color: #8CC736;
       text-decoration: none;
+      font-family: "GemunuLibre-SemiBold", "GemunuLibre-Regular", system-ui,
+        -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     .goat-popup a:hover {
@@ -73,7 +110,7 @@
       background-color: #111;
     }
 
-    /* Marker bounce (using margin-top so we don't override Leaflet's transform) */
+    /* Marker bounce on initial load (using margin-top so Leaflet transforms are untouched) */
     @keyframes goat-bounce {
       0%, 20%, 50%, 80%, 100% {
         margin-top: 0;
@@ -110,6 +147,8 @@
       height: 32px;
       text-align: center;
       box-shadow: 0 0 6px rgba(0,0,0,0.6);
+      font-family: "GemunuLibre-ExtraBold", system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     .marker-cluster span {
@@ -133,18 +172,219 @@
 
     // Map country codes to full names when we only get initialisms
     const COUNTRY_NAMES = {
+      // North America
       US: "United States",
       USA: "United States",
+      CA: "Canada",
+      MX: "Mexico",
+    
+      // South America
+      AR: "Argentina",
+      BO: "Bolivia",
+      BR: "Brazil",
+      CL: "Chile",
+      CO: "Colombia",
+      EC: "Ecuador",
+      GY: "Guyana",
+      PY: "Paraguay",
+      PE: "Peru",
+      SR: "Suriname",
+      UY: "Uruguay",
+      VE: "Venezuela",
+    
+      // Europe
       GB: "United Kingdom",
       UK: "United Kingdom",
-      CA: "Canada",
+      IE: "Ireland",
+      FR: "France",
+      DE: "Germany",
+      NL: "Netherlands",
+      BE: "Belgium",
+      LU: "Luxembourg",
+      ES: "Spain",
+      PT: "Portugal",
+      IT: "Italy",
+      CH: "Switzerland",
+      AT: "Austria",
+      DK: "Denmark",
+      NO: "Norway",
+      SE: "Sweden",
+      FI: "Finland",
+      IS: "Iceland",
+      GR: "Greece",
+      PL: "Poland",
+      CZ: "Czech Republic",
+      SK: "Slovakia",
+      HU: "Hungary",
+      RO: "Romania",
+      BG: "Bulgaria",
+      HR: "Croatia",
+      RS: "Serbia",
+      SI: "Slovenia",
+      BA: "Bosnia and Herzegovina",
+      ME: "Montenegro",
+      MK: "North Macedonia",
+      AL: "Albania",
+      LT: "Lithuania",
+      LV: "Latvia",
+      EE: "Estonia",
+      UA: "Ukraine",
+      BY: "Belarus",
+      MD: "Moldova",
+    
+      // Middle East / West Asia
+      TR: "Turkey",
+      CY: "Cyprus",
+      IL: "Israel",
+      PS: "Palestine",
+      LB: "Lebanon",
+      SY: "Syria",
+      JO: "Jordan",
+      IQ: "Iraq",
+      SA: "Saudi Arabia",
+      KW: "Kuwait",
+      QA: "Qatar",
+      AE: "United Arab Emirates",
+      OM: "Oman",
+      BH: "Bahrain",
+      YE: "Yemen",
+      AM: "Armenia",
+      GE: "Georgia",
+      AZ: "Azerbaijan",
+    
+      // Central Asia
+      KZ: "Kazakhstan",
+      KG: "Kyrgyzstan",
+      TJ: "Tajikistan",
+      TM: "Turkmenistan",
+      UZ: "Uzbekistan",
+    
+      // South Asia
+      IN: "India",
+      PK: "Pakistan",
+      BD: "Bangladesh",
+      LK: "Sri Lanka",
+      NP: "Nepal",
+      BT: "Bhutan",
+      MV: "Maldives",
+      AF: "Afghanistan",
+    
+      // East Asia
+      CN: "China",
+      JP: "Japan",
+      KR: "South Korea",
+      KP: "North Korea",
+      TW: "Taiwan",
+      MN: "Mongolia",
+    
+      // Southeast Asia
+      ID: "Indonesia",
+      MY: "Malaysia",
+      SG: "Singapore",
+      TH: "Thailand",
+      VN: "Vietnam",
+      KH: "Cambodia",
+      LA: "Laos",
+      MM: "Myanmar",
+      PH: "Philippines",
+      BN: "Brunei",
+      TL: "Timor-Leste",
+    
+      // Oceania
       AU: "Australia",
       NZ: "New Zealand",
-      IE: "Ireland",
-      DE: "Germany",
-      FR: "France"
-      // add more as needed
+      FJ: "Fiji",
+      PG: "Papua New Guinea",
+      WS: "Samoa",
+      TO: "Tonga",
+      SB: "Solomon Islands",
+      VU: "Vanuatu",
+      MH: "Marshall Islands",
+      KI: "Kiribati",
+      TV: "Tuvalu",
+      NR: "Nauru",
+      PW: "Palau",
+    
+      // Africa
+      ZA: "South Africa",
+      EG: "Egypt",
+      MA: "Morocco",
+      DZ: "Algeria",
+      TN: "Tunisia",
+      LY: "Libya",
+      SD: "Sudan",
+      SS: "South Sudan",
+      ET: "Ethiopia",
+      SO: "Somalia",
+      KE: "Kenya",
+      UG: "Uganda",
+      TZ: "Tanzania",
+      RW: "Rwanda",
+      BI: "Burundi",
+      CD: "Democratic Republic of the Congo",
+      CG: "Republic of the Congo",
+      GA: "Gabon",
+      CM: "Cameroon",
+      CF: "Central African Republic",
+      TD: "Chad",
+      NE: "Niger",
+      NG: "Nigeria",
+      BJ: "Benin",
+      TG: "Togo",
+      GH: "Ghana",
+      CI: "Côte d’Ivoire",
+      LR: "Liberia",
+      SL: "Sierra Leone",
+      GN: "Guinea",
+      GW: "Guinea-Bissau",
+      ML: "Mali",
+      MR: "Mauritania",
+      SN: "Senegal",
+      GM: "The Gambia",
+      BF: "Burkina Faso",
+      NA: "Namibia",
+      BW: "Botswana",
+      ZM: "Zambia",
+      ZW: "Zimbabwe",
+      MZ: "Mozambique",
+      MG: "Madagascar",
+      MU: "Mauritius",
+      SC: "Seychelles",
+      KM: "Comoros",
+      ER: "Eritrea",
+      DJ: "Djibouti",
+      GQ: "Equatorial Guinea",
+      ST: "São Tomé and Príncipe",
+      LS: "Lesotho",
+      SZ: "Eswatini",
+      AO: "Angola",
+      EH: "Western Sahara",
+    
+      // Caribbean
+      CU: "Cuba",
+      DO: "Dominican Republic",
+      HT: "Haiti",
+      JM: "Jamaica",
+      TT: "Trinidad and Tobago",
+      BB: "Barbados",
+      BS: "Bahamas",
+      AG: "Antigua and Barbuda",
+      GD: "Grenada",
+      LC: "Saint Lucia",
+      VC: "Saint Vincent and the Grenadines",
+      DM: "Dominica",
+      KN: "Saint Kitts and Nevis",
+    
+      // Central America
+      GT: "Guatemala",
+      BZ: "Belize",
+      SV: "El Salvador",
+      HN: "Honduras",
+      NI: "Nicaragua",
+      CR: "Costa Rica",
+      PA: "Panama"
     };
+
 
     const defaultIcon = L.icon({
       iconUrl: DEFAULT_GOAT_ICON_URL,
@@ -163,8 +403,10 @@
       map = L.map("map", {
         zoomControl: true,
         worldCopyJump: true,
-        maxBounds: [[-85, -180], [85, 180]],   // restrict vertical panning to map extents
-        maxBoundsViscosity: 1.0                // "rubber band" at the edges
+        maxBounds: [[-85, -180], [85, 180]],   // restrict vertical panning
+        maxBoundsViscosity: 1.0,               // hard "rubber band" at edges
+        minZoom: 2,
+        maxZoom: 6                              // cap zoom so tiles / world don't expose white gaps
       }).setView([20, 0], 2);
 
       L.tileLayer(
@@ -173,7 +415,8 @@
           attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
           subdomains: "abcd",
-          maxZoom: 19
+          maxZoom: 6,          // match map's maxZoom to avoid blank tiles at crazy zoom
+          minZoom: 2
         }
       ).addTo(map);
 
@@ -285,12 +528,27 @@
                   : ""
               }
               <div style="max-width:220px;">
-                <div style="font-weight:600;font-size:18px;margin-bottom:2px;">
+                <div style="
+                  font-weight:600;
+                  font-size:18px;
+                  margin-bottom:2px;
+                  font-family:'American Captain','GemunuLibre-SemiBold',
+                    system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                ">
                   ${escapeHtml(name)}
                 </div>
                 ${
                   locationText
-                    ? `<div style="font-size:11px;opacity:0.85;margin-bottom:3px;display:flex;align-items:center;gap:4px;">
+                    ? `<div style="
+                         font-size:11px;
+                         opacity:0.85;
+                         margin-bottom:3px;
+                         display:flex;
+                         align-items:center;
+                         gap:4px;
+                         font-family:'GemunuLibre-SemiBold','GemunuLibre-Regular',
+                           system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                       ">
                          <span>${locationText}</span>
                          ${flagImgHtml}
                        </div>`
@@ -298,7 +556,12 @@
                 }
                 ${
                   goat.subtitle
-                    ? `<div style="margin-top:2px;opacity:0.9;">
+                    ? `<div style="
+                         margin-top:2px;
+                         opacity:0.9;
+                         font-family:'GemunuLibre-Regular',system-ui,-apple-system,
+                           BlinkMacSystemFont,'Segoe UI',sans-serif;
+                       ">
                          ${escapeHtml(goat.subtitle)}
                        </div>`
                     : ""
@@ -321,18 +584,7 @@
           popupHtml
         );
 
-        // Bounce when popup opens (no hover scaling)
-        marker.on("popupopen", () => {
-          const el = marker.getElement();
-          if (el) {
-            el.classList.add("goat-bounce");
-            // Remove class after animation so repeated opens re-trigger
-            setTimeout(() => {
-              el.classList.remove("goat-bounce");
-            }, 550);
-          }
-        });
-
+        // No hover scaling, no click animation – just add to cluster
         markerCluster.addLayer(marker);
         markers.push(marker);
         bounds.push([lat, lng]);
@@ -343,6 +595,19 @@
       } else if (bounds.length > 1) {
         map.fitBounds(bounds, { padding: [40, 40] });
       }
+
+      // Trigger one-time bounce for all visible markers shortly after they render
+      setTimeout(() => {
+        markers.forEach((marker) => {
+          const el = marker.getElement();
+          if (el) {
+            el.classList.add("goat-bounce");
+            setTimeout(() => {
+              el.classList.remove("goat-bounce");
+            }, 550);
+          }
+        });
+      }, 400);
     }
 
     // Listen for messages from Wix (parent)
