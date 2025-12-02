@@ -9,6 +9,9 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
+  <!-- Turf.js for robust great-circle calculation -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
   <style>
     /* ===================== FONTS ===================== */
     @font-face {
@@ -148,7 +151,7 @@
       border-radius: 12px;
       padding: 14px 16px;
       min-width: 360px;
-      max-width: 560px;
+      max-width: 560px; /* ~50% wider tooltip */
     }
 
     .mapboxgl-popup-close-button {
@@ -174,8 +177,8 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 11px;
-      color: #A3A3A3;
+      font-size: 11px;        /* location line text size 11 */
+      color: #A3A3A3;          /* updated colour */
       margin-top: 4px;
     }
 
@@ -188,7 +191,7 @@
       background-position: center;
     }
 
-    /* Popup country flags */
+    /* Popup country flags – these were missing before */
     .trip-flag-au { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/au.svg"); }
     .trip-flag-ca { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg"); }
     .trip-flag-us { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg"); }
@@ -203,7 +206,7 @@
     .trip-popup-travelled {
       margin-top: 10px;
       font-size: 11px;
-      color: #A3A3A3;
+      color: #A3A3A3;  /* travelled line colour */
     }
 
     .trip-popup-divider {
@@ -372,7 +375,6 @@
   </div>
   <div id="hudLabel" class="journey-hud-label"></div>
 </div>
-
 <script>
 /* ======================================================================= */
 /* ========================== CONFIG & GLOBALS ============================ */
@@ -380,12 +382,11 @@
 
 mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
-const DEFAULT_CENTER = [245, 20];  // start with Australia in view
+const DEFAULT_CENTER = [245, 20];  
 const DEFAULT_ZOOM   = 2.8;
-const DEFAULT_BEARING = 0;
-const DEFAULT_PITCH   = 0;
-const DEFAULT_VIEW = { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, bearing: DEFAULT_BEARING, pitch: DEFAULT_PITCH };
 
+
+/* Spin state & journey state */
 let spinning = true;
 let userInterrupted = false;
 let journeyMode = false;
@@ -393,24 +394,16 @@ let currentID = null;
 let MAP_READY = false;
 let spinFrame = null;
 
+/* Which markers stay at all zoom levels */
 const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
 
-function resetCamera(animate=true){
-  const opts={...DEFAULT_VIEW};
-
-  if(animate){
-    map.easeTo({...opts,duration:1500});
-  } else {
-    map.jumpTo(opts);
-  }
-}
-
+/* Mode icons */
 const MODE_ICONS = {
   Plane: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
   Car:   "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/car1.svg"
 };
 
-/* ===================== HTML ESCAPING ===================== */
+/* Safe text escaping for popup HTML */
 function escapeHTML(value) {
   return String(value ?? "")
     .replace(/&/g,"&amp;")
@@ -458,186 +451,31 @@ const WAYPOINTS = [
     body:"Meeting Shawn and starting road trip.",
     icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg"
   },
-  {
-    id:"hamilton",
-    role:"minor",
-    country:"ca",
-    mode:"Car",
-    coords:[-79.8711,43.2557],
-    name:"Waypoint – Hamilton",
-    location:"Hamilton, Ontario",
-    body:"Passing Hamilton on the way to Niagara.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"niagarafalls",
-    role:"minor",
-    country:"ca",
-    mode:"Car",
-    coords:[-79.0849,43.0896],
-    name:"Waypoint – Niagara Falls",
-    location:"Niagara Falls, Ontario",
-    body:"Crossing the border after Niagara.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"buffalo",
-    role:"major",
-    country:"us",
-    mode:"Car",
-    coords:[-78.73351075487278,42.93973725814752],
-    name:"Major Waypoint – Buffalo",
-    location:"Buffalo Niagara Intl Airport",
-    body:"Picking up Gina flying in from Boston.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg"
-  },
-  {
-    id:"batavia",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-78.193,42.9987],
-    name:"Waypoint – Batavia",
-    location:"Batavia NY",
-    body:"Small stop on I-90.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"rochester",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-77.6088,43.1566],
-    name:"Waypoint – Rochester",
-    location:"Rochester NY",
-    body:"Passing Rochester heading east.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"geneva",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-76.9856,42.8684],
-    name:"Waypoint – Geneva",
-    location:"Geneva NY",
-    body:"Finger Lakes waypoint.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"syracuse",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-76.1474,43.0481],
-    name:"Waypoint – Syracuse",
-    location:"Syracuse NY",
-    body:"Another major eastbound point.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"utica",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-75.2327,43.1009],
-    name:"Waypoint – Utica",
-    location:"Utica NY",
-    body:"Passing Utica on I-90.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"albany",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-73.7562,42.6526],
-    name:"Waypoint – Albany",
-    location:"Albany NY",
-    body:"New York’s state capital.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"kingston",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-73.9974,41.927],
-    name:"Waypoint – Kingston",
-    location:"Kingston NY",
-    body:"Hudson Valley waypoint.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"newburgh",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-74.0104,41.5034],
-    name:"Waypoint – Newburgh",
-    location:"Newburgh NY",
-    body:"Near Hudson bridge crossings.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"whiteplains",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-73.7629,41.033],
-    name:"Waypoint – White Plains",
-    location:"White Plains NY",
-    body:"Before entering NYC region.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"nyc",
-    role:"major",
-    country:"us",
-    mode:"Car",
-    coords:[-73.98518854058835,40.758137170862625],
-    name:"Major Waypoint – New York City",
-    location:"Times Square",
-    body:"NYC before heading south.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg"
-  },
-  {
-    id:"hoboken",
-    role:"minor",
-    country:"us",
-    mode:"Car",
-    coords:[-74.0324,40.7433],
-    name:"Waypoint – Hoboken",
-    location:"Hoboken NJ",
-    body:"Passing through Hoboken waterfront.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"
-  },
-  {
-    id:"newark",
-    role:"major",
-    country:"us",
-    mode:"Car",
-    coords:[-74.1706,40.7336],
-    name:"Major Waypoint – Newark",
-    location:"Prudential Center",
-    body:"Meet-up with Amanda & Davey from Missouri.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg"
-  },
-  {
-    id:"tomsriver",
-    role:"destination",
-    country:"us",
-    mode:"Car",
-    coords:[-74.18603,39.962545],
-    name:"Final Destination – Toms River",
-    location:"179 NJ-37 East, Toms River NJ",
-    body:"Final stop of the road trip campaign.",
-    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg"
-  }
+
+  /* Driving waypoints */
+  { id:"hamilton",      role:"minor", country:"ca", mode:"Car", coords:[-79.8711,43.2557], name:"Waypoint – Hamilton", location:"Hamilton, Ontario", body:"Passing Hamilton on the way to Niagara.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"niagarafalls", role:"minor", country:"ca", mode:"Car", coords:[-79.0849,43.0896], name:"Waypoint – Niagara Falls", location:"Niagara Falls, Ontario", body:"Crossing the border after Niagara.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"buffalo",       role:"major", country:"us", mode:"Car", coords:[-78.73351075487278,42.93973725814752], name:"Major Waypoint – Buffalo", location:"Buffalo Niagara Intl Airport", body:"Picking up Gina flying in from Boston.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg" },
+  { id:"batavia",       role:"minor", country:"us", mode:"Car", coords:[-78.193,42.9987], name:"Waypoint – Batavia", location:"Batavia NY", body:"Small stop on I-90.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"rochester",     role:"minor", country:"us", mode:"Car", coords:[-77.6088,43.1566], name:"Waypoint – Rochester", location:"Rochester NY", body:"Passing Rochester heading east.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"geneva",        role:"minor", country:"us", mode:"Car", coords:[-76.9856,42.8684], name:"Waypoint – Geneva", location:"Geneva NY", body:"Finger Lakes waypoint.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"syracuse",      role:"minor", country:"us", mode:"Car", coords:[-76.1474,43.0481], name:"Waypoint – Syracuse", location:"Syracuse NY", body:"Another major eastbound point.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"utica",         role:"minor", country:"us", mode:"Car", coords:[-75.2327,43.1009], name:"Waypoint – Utica", location:"Utica NY", body:"Passing Utica on I-90.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"albany",        role:"minor", country:"us", mode:"Car", coords:[-73.7562,42.6526], name:"Waypoint – Albany", location:"Albany NY", body:"New York’s state capital.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"kingston",      role:"minor", country:"us", mode:"Car", coords:[-73.9974,41.927], name:"Waypoint – Kingston", location:"Kingston NY", body:"Hudson Valley waypoint.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"newburgh",      role:"minor", country:"us", mode:"Car", coords:[-74.0104,41.5034], name:"Waypoint – Newburgh", location:"Newburgh NY", body:"Near Hudson bridge crossings.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"whiteplains",   role:"minor", country:"us", mode:"Car", coords:[-73.7629,41.033], name:"Waypoint – White Plains", location:"White Plains NY", body:"Before entering NYC region.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"nyc",           role:"major", country:"us", mode:"Car", coords:[-73.98518854058835,40.758137170862625], name:"Major Waypoint – New York City", location:"Times Square", body:"NYC before heading south.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg" },
+  { id:"hoboken",       role:"minor", country:"us", mode:"Car", coords:[-74.0324,40.7433], name:"Waypoint – Hoboken", location:"Hoboken NJ", body:"Passing through Hoboken waterfront.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg" },
+  { id:"newark",        role:"major", country:"us", mode:"Car", coords:[-74.1706,40.7336], name:"Major Waypoint – Newark", location:"Prudential Center", body:"Meet-up with Amanda & Davey from Missouri.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg" },
+  { id:"tomsriver",     role:"destination", country:"us", mode:"Car", coords:[-74.18603,39.962545], name:"Final Destination – Toms River", location:"179 NJ-37 East, Toms River NJ", body:"Final stop of the road trip campaign.", icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg" }
 ];
 
+/* Trip order = same as waypoint order */
 const TRIP_ORDER  = WAYPOINTS.map(w => w.id);
-const DRIVE_ORDER = TRIP_ORDER.slice(2);  // from Toronto onwards
+
+/* Driving route only from Toronto onward */
+const DRIVE_ORDER = TRIP_ORDER.slice(2);
 
 /* ======================================================================= */
 /* =========================== MAP INIT ================================== */
@@ -646,7 +484,9 @@ const DRIVE_ORDER = TRIP_ORDER.slice(2);  // from Toronto onwards
 const map = new mapboxgl.Map({
   container: "map",
   style: "mapbox://styles/mapbox/dark-v11",
-  ...DEFAULT_VIEW,
+  center: DEFAULT_CENTER,
+  zoom: DEFAULT_ZOOM,
+  pitch: DEFAULT_PITCH,
   renderWorldCopies: false,
   projection: "globe"
 });
@@ -661,24 +501,21 @@ function spinGlobe() {
   if (spinFrame) cancelAnimationFrame(spinFrame);
   if (!spinning || journeyMode) return;
 
-  const step = () => {
-    if (!spinning || journeyMode) { spinFrame=null; return; }
+  // Earth rotates west → east = longitude decreases
+  const c = map.getCenter();
+  const newLon = c.lng - 0.02;
 
-    const bearing = (map.getBearing() - 0.05) % 360; // west → east drift
-    map.easeTo({
-      ...DEFAULT_VIEW,
-      bearing,
-      duration: 0,
-      easing: t => t
-    });
+  // Smooth subtle pitch sway
+  const t = Date.now() * 0.00005;
+  const pitch = 10 + Math.sin(t) * 3;
 
-    spinFrame = requestAnimationFrame(step);
-  };
+  map.setCenter([newLon, c.lat]);
+  map.setPitch(pitch);
 
   step();
 }
 
-/* User interaction stops spin */
+/* Stop spin on user interaction */
 ["mousedown","touchstart","wheel","keydown"].forEach(ev=>{
   map.on(ev, e =>{
     if(!e.originalEvent) return;
@@ -709,11 +546,17 @@ function haversine(a,b){
   return 2*R*Math.asin(Math.sqrt(h));
 }
 
+function getWP(id){ return WAYPOINTS.find(w=>w.id===id); }
+
 function initDistances(){
   let kmSum=0, miSum=0;
 
   TRIP_ORDER.forEach((id,i)=>{
-    if(i===0){ TRAVELLED_KM[id]=0; TRAVELLED_MI[id]=0; return; }
+    if(i===0){
+      TRAVELLED_KM[id]=0;
+      TRAVELLED_MI[id]=0;
+      return;
+    }
 
     const prev=getWP(TRIP_ORDER[i-1]);
     const cur =getWP(id);
@@ -734,278 +577,346 @@ function initDistances(){
     `Total Distance: ${TRAVELLED_MI[last]}mi (${TRAVELLED_KM[last]}km)`;
 }
 
-function getWP(id){ return WAYPOINTS.find(w=>w.id===id); }
-
 /* ======================================================================= */
-/* ========== TRUE GREAT-CIRCLE INTERPOLATION (SPHERICAL SLERP) =========== */
+/* =================== TRUE GREAT-CIRCLE (Turf.js) ======================== */
 /* ======================================================================= */
 
-function toRadians(deg){ return deg * Math.PI / 180; }
-function toDegrees(rad){ return rad * 180 / Math.PI; }
+/**
+ * Build a perfect great-circle arc using Turf.js.
+ * This solves ALL zigzag issues because Turf automatically:
+ *   • unwraps longitudes correctly
+ *   • prevents Africa-crossing artifacts
+ *   • produces smooth great-circle geometry
+ */
+ 
+ /* Safely normalize lon/lat into a single valid world copy */
+function normalizeCoord(lon, lat) {
+  // Guard against null/undefined/NaN
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
 
-function latLonToCartesian(lat, lon){
-  lat = toRadians(lat);
-  lon = toRadians(lon);
-  return [
-    Math.cos(lat) * Math.cos(lon),
-    Math.cos(lat) * Math.sin(lon),
-    Math.sin(lat)
-  ];
+  // Normalize longitude into [-180, 180)
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+
+  // Clamp latitude into safe range
+  lat = Math.max(-89.999999, Math.min(89.999999, lat));
+
+  return [lon, lat];
 }
 
-function cartesianToLatLon(x,y,z){
-  const hyp = Math.sqrt(x*x + y*y);
-  const lat = Math.atan2(z, hyp);
-  const lon = Math.atan2(y, x);
-  return [ toDegrees(lon), toDegrees(lat) ];
+ 
+/**
+ * Build a perfect great-circle arc using Turf.js.
+ * This solves ALL zigzag issues and avoids NaN coordinates.
+ */
+function buildGreatCircle(fromId, toId, steps = 200) {
+  const a = getWP(fromId).coords;
+  const b = getWP(toId).coords;
+
+  const line = turf.greatCircle(
+    [a[0], a[1]],
+    [b[0], b[1]],
+    { npoints: steps }
+  );
+
+  // Normalize & filter out any invalid coordinates
+  const coords = line.geometry.coordinates
+    .map(([lon, lat]) => normalizeCoord(lon, lat))
+    .filter(Boolean); // remove nulls
+
+  // If Turf fails (edge case), fall back to manual arc interpolation
+  if (coords.length < 2) {
+    console.warn(
+      "Great-circle produced too few points for",
+      fromId, "→", toId,
+      "– using manual fallback.",
+      coords
+    );
+    return manualFallbackArc(a, b, steps);
+  }
+
+  return coords;
 }
 
-function greatCircleArc(a, b, steps=180){
+/**
+ * Manual fallback for great-circle using lon/lat interpolation.
+ * Adjusts longitudes to follow the SHORT path across the dateline
+ * (so Sydney → LAX goes over the Pacific, not over Africa).
+ */
+function manualFallbackArc(a, b, steps = 200) {
   const [lon1, lat1] = a;
   const [lon2, lat2] = b;
 
-  const A = latLonToCartesian(lat1, lon1);
-  const B = latLonToCartesian(lat2, lon2);
+  let startLon = lon1;
+  let endLon   = lon2;
 
-  // Dot product & angle
-  const dot = A[0]*B[0] + A[1]*B[1] + A[2]*B[2];
-  const angle = Math.acos(Math.min(Math.max(dot, -1), 1));
-
-  const coords=[];
-  for(let i=0;i<=steps;i++){
-    const t = i/steps;
-
-    const sin1 = Math.sin((1-t)*angle);
-    const sin2 = Math.sin(t*angle);
-    const sinA = Math.sin(angle);
-
-    const x = (A[0]*sin1 + B[0]*sin2) / sinA;
-    const y = (A[1]*sin1 + B[1]*sin2) / sinA;
-    const z = (A[2]*sin1 + B[2]*sin2) / sinA;
-
-    let [lon,lat] = cartesianToLatLon(x,y,z);
-
-    coords.push([lon, lat]);
-  }
-  return unwrapPath(coords);
-}
-
-function unwrapPath(coords){
-  let out=[];
-  let prev=null;
-  coords.forEach(pt=>{
-    let [lng,lat]=pt;
-    if(prev!==null){
-      const diff=lng-prev;
-      if(diff>180) lng-=360;
-      if(diff<-180) lng+=360;
+  // If we cross more than 180° of longitude, wrap so we take the short way
+  let delta = endLon - startLon;
+  if (Math.abs(delta) > 180) {
+    if (delta > 0) {
+      startLon += 360;
+    } else {
+      endLon += 360;
     }
-    out.push([lng,lat]);
-    prev=lng;
-  });
-
-  // re-center the longitudes so the span stays within a single world copy
-  const lons = out.map(c=>c[0]);
-  const mid = (Math.max(...lons)+Math.min(...lons))/2;
-  const shift = -360 * Math.round(mid/360);
-  if(shift){
-    out = out.map(([lng,lat])=>[lng+shift,lat]);
   }
 
-  // final clamp in case the span still exceeds a hemisphere
-  const base = out[0][0];
-  out = out.map(([lng,lat])=>{
-    let adj = lng;
-    while(adj-base>180) adj-=360;
-    while(adj-base<-180) adj+=360;
-    return [adj,lat];
-  });
+  const out = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+
+    const lon = startLon + (endLon - startLon) * t;
+    const lat = lat1    + (lat2    - lat1)    * t;
+
+    const norm = normalizeCoord(lon, lat);
+    if (norm) out.push(norm);
+  }
 
   return out;
 }
 
-function buildFlightSegment(fromId, toId){
-  const start = getWP(fromId).coords;
-  const end   = getWP(toId).coords.slice();
 
-  const diff = end[0] - start[0];
-  if (Math.abs(diff) > 180) {
-    end[0] += diff > 0 ? -360 : 360; // unwrap across the Pacific instead of the dateline zigzag
-  }
 
-  return greatCircleArc(start, end);
+/* ======================================================================= */
+/* ======================== STATIC ROUTE LAYERS =========================== */
+/* ======================================================================= */
+
+function addStaticRoutes() {
+  const SYD_LA = buildGreatCircle("sydney", "la");
+  const LA_YTZ = buildGreatCircle("la", "toronto").slice(1);
+
+  const allFlight = [...SYD_LA, ...LA_YTZ];
+
+  map.addSource("flight-route", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: allFlight },
+      bbox: [-180, -90, 180, 90],
+      wrap: false
+    }
+  });
+
+  map.addLayer({
+    id: "flight-route",
+    type: "line",
+    source: "flight-route",
+    paint: {
+      "line-color": "#478ED3",
+      "line-width": 3,
+      "line-dasharray": [3, 2],
+      "line-opacity": 0.9
+    }
+  });
 }
 
 /* ======================================================================= */
-/* ====================== DRIVING ROUTE (MAPBOX API) ====================== */
+/* ======================= DRIVING ROUTE (MAPBOX) ========================= */
 /* ======================================================================= */
 
 let DRIVING_GEOM = [];
 let DRIVE_INDEX  = {};
 
-async function buildDrivingRoute(){
-  const coords = DRIVE_ORDER.map(id=>getWP(id).coords);
-  const url="https://api.mapbox.com/directions/v5/mapbox/driving/"+coords.map(c=>c.join(",")).join(";")+
-            `?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`;
+/**
+ * Builds the driving polyline via Mapbox Directions
+ * and indexes nearest geometry points for each waypoint.
+ */
+async function buildDrivingRoute() {
+  const coords = DRIVE_ORDER.map(id => getWP(id).coords);
+
+  if (coords.length < 2) return;
+
+  const url =
+    "https://api.mapbox.com/directions/v5/mapbox/driving/" +
+    coords.map(c => c.join(",")).join(";") +
+    `?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`;
+
   const res = await fetch(url);
-  const json= await res.json();
+  const json = await res.json();
 
-  if(!json.routes || !json.routes.length) return;
+  if (!json.routes || !json.routes.length) return;
 
-  DRIVING_GEOM=json.routes[0].geometry.coordinates;
+  // Full geometry
+  DRIVING_GEOM = json.routes[0].geometry.coordinates;
 
-  map.addSource("drive-route",{type:"geojson",data:json.routes[0].geometry});
-  map.addLayer({
-    id:"drive-route",
-    type:"line",
-    source:"drive-route",
-    paint:{
-      "line-color":"#FF9C57",
-      "line-width":4,
-      "line-opacity":0.95
-    }
-  });
-
-  // Index driving path for partial rendering
-  coords.forEach((wp,i)=>{
-    let best=0, bestD=1e9;
-    DRIVING_GEOM.forEach((c,n)=>{
-      const d=haversine(wp,c);
-      if(d<bestD){ bestD=d; best=n; }
-    });
-    DRIVE_INDEX[DRIVE_ORDER[i]]=best;
-  });
-}
-
-/* ======================================================================= */
-/* ========================= STATIC ROUTES ================================ */
-/* ======================================================================= */
-
-function addStaticRoutes(){
-  const F1 = buildFlightSegment("sydney","la");
-  const F2 = buildFlightSegment("la","toronto").slice(1);
-  const FLIGHT = [...F1, ...F2];
-
-  map.addSource("flight-route",{
-    type:"geojson",
-    data:{
-      type:"Feature",
-      geometry:{type:"LineString",coordinates:FLIGHT},
-      bbox:[-180,-90,180,90],
-      wrap:false
-    }
+  // Add static driving layer
+  map.addSource("drive-route", {
+    type: "geojson",
+    data: json.routes[0].geometry
   });
 
   map.addLayer({
-    id:"flight-route",
-    type:"line",
-    source:"flight-route",
-    paint:{
-      "line-color":"#478ED3",
-      "line-width":3,
-      "line-dasharray":[3,2],
-      "line-opacity":0.9
+    id: "drive-route",
+    type: "line",
+    source: "drive-route",
+    paint: {
+      "line-color": "#FF9C57",
+      "line-width": 4,
+      "line-opacity": 0.95
     }
+  });
+
+  // Build index mapping waypoint → nearest driving polyline point
+  coords.forEach((wp, i) => {
+    let bestIndex = 0;
+    let bestDist = Infinity;
+
+    DRIVING_GEOM.forEach((c, n) => {
+      const d = haversine(wp, c);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIndex = n;
+      }
+    });
+
+    DRIVE_INDEX[DRIVE_ORDER[i]] = bestIndex;
   });
 }
 
 /* ======================================================================= */
-/* ===================== NATION SHADING ================================== */
+/* ======================== BUILD ROAD SEGMENT ============================ */
 /* ======================================================================= */
 
-async function addNation(id,url,color,opacity){
-  try{
-    const r=await fetch(url);
-    const g=await r.json();
-    map.addSource(id,{type:"geojson",data:g});
-    map.addLayer({ id:id+"-fill", type:"fill", source:id,
-      paint:{ "fill-color":color, "fill-opacity":opacity }
-    });
-    map.addLayer({ id:id+"-outline", type:"line", source:id,
-      paint:{ "line-color":color, "line-width":1.2 }
-    });
-  }catch(e){ console.error(e); }
+function roadLeg(a, b) {
+  if (!DRIVING_GEOM.length) return [];
+
+  let s = DRIVE_INDEX[a];
+  let e = DRIVE_INDEX[b];
+
+  if (typeof s !== "number" || typeof e !== "number") return [];
+
+  if (s > e) [s, e] = [e, s];
+
+  return DRIVING_GEOM.slice(s, e + 1);
 }
 
 /* ======================================================================= */
-/* =========================== MARKERS ==================================== */
+/* ======================= NATION SHADING LAYERS ========================== */
+/* ======================================================================= */
+
+async function addNation(id, url, color, opacity) {
+  try {
+    const r = await fetch(url);
+    const g = await r.json();
+
+    map.addSource(id, { type: "geojson", data: g });
+
+    map.addLayer({
+      id: id + "-fill",
+      type: "fill",
+      source: id,
+      paint: {
+        "fill-color": color,
+        "fill-opacity": opacity
+      }
+    });
+
+    map.addLayer({
+      id: id + "-outline",
+      type: "line",
+      source: id,
+      paint: {
+        "line-color": color,
+        "line-width": 1.2
+      }
+    });
+  }
+  catch (e) {
+    console.error("Nation load error:", e);
+  }
+}
+/* ======================================================================= */
+/* ============================ MARKERS =================================== */
 /* ======================================================================= */
 
 const MARKERS = {};
 const POPUPS  = {};
 const MINOR_MARKERS = [];
 
-function buildMarkers(){
-  WAYPOINTS.forEach(w=>{
-    const el=document.createElement("div");
-    el.className="trip-marker "+w.role;
-    el.innerHTML=`<img src="${w.icon}">`;
+function buildMarkers() {
+  WAYPOINTS.forEach(w => {
+    const el = document.createElement("div");
+    el.className = "trip-marker " + w.role;
+    el.innerHTML = `<img src="${w.icon}">`;
 
-    setTimeout(()=>el.classList.add("bounce"),80);
+    // Entry animation
+    setTimeout(() => el.classList.add("bounce"), 80);
 
-    const popupHTML = buildPopupHTML(w);
-    const popup=new mapboxgl.Popup({offset:28, closeOnClick:true})
-      .setHTML(popupHTML)
+    const popup = new mapboxgl.Popup({
+      offset: 28,
+      closeOnClick: true
+    }).setHTML(buildPopupHTML(w))
       .setLngLat(w.coords);
 
-    const marker=new mapboxgl.Marker({element:el,anchor:"bottom"})
+    const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
       .setLngLat(w.coords)
       .addTo(map);
 
-    MARKERS[w.id]=marker;
-    POPUPS[w.id]=popup;
+    MARKERS[w.id] = marker;
+    POPUPS[w.id] = popup;
 
-    if(w.role==="minor") MINOR_MARKERS.push(marker);
+    if (w.role === "minor") MINOR_MARKERS.push(marker);
 
-    el.addEventListener("click",(ev)=>{
+    el.addEventListener("click", ev => {
       ev.stopPropagation();
       openPopupFor(w.id);
-      map.easeTo({center:w.coords,zoom:getZoom(w.id),duration:1200});
+      map.easeTo({
+        center: w.coords,
+        zoom: getZoom(w.id),
+        duration: 1000
+      });
       currentID = w.id;
     });
   });
 
-  map.on("click",()=>closeAllPopups());
+  map.on("click", () => closeAllPopups());
 
-  // zoom-based minor visibility
-  function updateMinor(){
+  /* Minor marker zoom visibility */
+  function updateMinorMarkers() {
     const show = map.getZoom() >= 5;
-    MINOR_MARKERS.forEach(m=>{
-      const el=m.getElement();
-      if(el) el.style.display=show ? "block" : "none";
+    MINOR_MARKERS.forEach(m => {
+      const el = m.getElement();
+      if (el) el.style.display = show ? "block" : "none";
     });
   }
-  updateMinor();
-  map.on("zoom", updateMinor);
+  updateMinorMarkers();
+  map.on("zoom", updateMinorMarkers);
 }
 
-function buildPopupHTML(w){
+/* ======================================================================= */
+/* ============================ POPUPS ==================================== */
+/* ======================================================================= */
+
+function buildPopupHTML(w) {
   const idx = TRIP_ORDER.indexOf(w.id);
-  const prev=(idx>0)?TRIP_ORDER[idx-1]:null;
-  const next=(idx<TRIP_ORDER.length-1)?TRIP_ORDER[idx+1]:null;
-  const mode=getLegMode(w.id);
+  const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
+  const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
 
-  const tMi=TRAVELLED_MI[w.id];
-  const tKm=TRAVELLED_KM[w.id];
-  const last=TRIP_ORDER.at(-1);
+  const tMi = TRAVELLED_MI[w.id];
+  const tKm = TRAVELLED_KM[w.id];
+  const totalMi = TRAVELLED_MI[TRIP_ORDER.at(-1)];
+  const totalKm = TRAVELLED_KM[TRIP_ORDER.at(-1)];
 
-  let navHTML="";
-  if(prev){
-    navHTML+=`<span class="trip-popup-nav-link" data-dir="prev" data-target="${prev}">Go Back</span>`;
+  const mode = getLegMode(w.id);
+
+  let navHTML = "";
+
+  if (prev) {
+    navHTML += `<span class="trip-popup-nav-link" data-dir="prev" data-target="${prev}">Go Back</span>`;
   }
-  if(next){
-    const d=LEG_DIST[w.id];
-    let dist="";
-    if(d){
-      dist=` - ${d.mi}mi <span style="color:#A3A3A3">(${d.km}km)</span>`;
+
+  if (next) {
+    const dist = LEG_DIST[w.id];
+    let label = "";
+    if (dist) {
+      label = ` - ${dist.mi}mi <span style="color:#A3A3A3">(${dist.km}km)</span>`;
     }
-    navHTML+=`
+    navHTML += `
       <span class="trip-popup-nav-link" data-dir="next" data-target="${next}">
-        <img src="${MODE_ICONS[mode]}" class="trip-popup-mode-icon"> Next Stop${dist}
+        <img src="${MODE_ICONS[mode]}" class="trip-popup-mode-icon"> Next Stop${label}
       </span>`;
   }
-  if(w.id==="tomsriver"){
-    navHTML+=`<span class="trip-popup-nav-link" data-reset="1">Reset Map</span>`;
+
+  if (w.id === "tomsriver") {
+    navHTML += `<span class="trip-popup-nav-link" data-reset="1">Reset Map</span>`;
   }
 
   return `
@@ -1023,363 +934,385 @@ function buildPopupHTML(w){
       <div class="trip-popup-body">${escapeHTML(w.body)}</div>
 
       <div class="trip-popup-travelled">
-        Travelled: ${tMi} / ${TRAVELLED_MI[last]}mi
-        <span style="color:#A3A3A3">(${tKm} / ${TRAVELLED_KM[last]}km)</span>
+        Travelled: ${tMi} / ${totalMi}mi 
+        <span style="color:#A3A3A3">(${tKm} / ${totalKm}km)</span>
       </div>
 
       <div class="trip-popup-divider"></div>
 
       <div class="trip-popup-nav">${navHTML}</div>
-    </div>`;
+    </div>
+  `;
 }
 
-function closeAllPopups(){
-  document.querySelectorAll(".mapboxgl-popup").forEach(p=>p.remove());
+function closeAllPopups() {
+  document.querySelectorAll(".mapboxgl-popup").forEach(p => p.remove());
 }
 
-function openPopupFor(id){
+function openPopupFor(id) {
   closeAllPopups();
-  const p=POPUPS[id];
-  if(p){ p.addTo(map); }
+  const p = POPUPS[id];
+  if (p) p.addTo(map);
 }
 
+/* Remove ARIA glitch: remove aria-hidden from popup close buttons */
+document.addEventListener("DOMNodeInserted", e => {
+  if (e.target.classList?.contains("mapboxgl-popup-close-button")) {
+    e.target.removeAttribute("aria-hidden");
+  }
+});
+
 /* ======================================================================= */
-/* ========================= JOURNEY MODE ================================= */
+/* ========================== JOURNEY LOGIC =============================== */
 /* ======================================================================= */
 
-function getZoom(id){
-  if(["sydney","la","toronto"].includes(id)) return 6.7;
+function getZoom(id) {
+  if (["sydney", "la", "toronto"].includes(id)) return 6.7;
   return 9.4;
 }
 
-function getLegMode(id){
-  const idx=TRIP_ORDER.indexOf(id);
-  const next=TRIP_ORDER[idx+1];
-  if(next && isFlight(id,next)) return "Plane";
+function getLegMode(id) {
+  const idx = TRIP_ORDER.indexOf(id);
+  const next = TRIP_ORDER[idx + 1];
+  if (next && isFlight(id, next)) return "Plane";
   return getWP(id).mode;
 }
 
-function isFlight(a,b){
-  return (a==="sydney"&&b==="la")||(a==="la"&&b==="toronto");
+function isFlight(a, b) {
+  return (a === "sydney" && b === "la") || (a === "la" && b === "toronto");
 }
 
-/* HUD elements */
-const hud      = document.getElementById("journeyHud");
-const hudPrev  = document.getElementById("hudPrev");
-const hudNext  = document.getElementById("hudNext");
+/* ======================================================================= */
+/* ============================= HUD ====================================== */
+/* ======================================================================= */
+
+const hud = document.getElementById("journeyHud");
+const hudPrev = document.getElementById("hudPrev");
+const hudNext = document.getElementById("hudNext");
 const hudLabel = document.getElementById("hudLabel");
 
-function startJourney(){
-  if(!MAP_READY) return;
+function updateHUD() {
+  if (!journeyMode) {
+    hud.style.display = "none";
+    return;
+  }
 
-  journeyMode=true;
-  spinning=false;
-  userInterrupted=true;
+  hud.style.display = "block";
 
-  document.getElementById("journeyToggle").textContent="Reset Journey";
-  document.getElementById("resetStaticMap").style.display="none";
+  const idx = TRIP_ORDER.indexOf(currentID);
+  const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
+  const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
 
-  currentID = TRIP_ORDER[0];
+  hudPrev.disabled = !prev;
 
-  if(map.getLayer("flight-route")) map.setLayoutProperty("flight-route","visibility","none");
-  if(map.getLayer("drive-route"))  map.setLayoutProperty("drive-route","visibility","none");
+  if (next) {
+    const d = LEG_DIST[currentID];
+    let distLabel = "";
+    if (d) distLabel = ` – ${d.mi}mi (${d.km}km)`;
+    hudNext.textContent = "Next Stop" + distLabel;
+    hudNext.disabled = false;
+  } else {
+    hudNext.textContent = "Next Stop";
+    hudNext.disabled = true;
+  }
 
-  ["journey-flight","journey-drive","journey-current"].forEach(id=>{
-    if(map.getLayer(id)){
-      map.setLayoutProperty(id,"visibility","visible");
-      const src=map.getSource(id);
-      if(src){
-        src.setData({type:"Feature",geometry:{type:"LineString",coordinates:[]}});
-      }
+  if (next) {
+    const mode = getLegMode(currentID);
+    const icon = MODE_ICONS[mode];
+    const wp = getWP(next);
+    hudLabel.innerHTML =
+      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(wp.location)} ` +
+      `<span class="hud-flag hud-flag-${wp.country}"></span>`;
+  } else {
+    hudLabel.textContent = "";
+  }
+}
+
+hudPrev.addEventListener("click", () => {
+  if (!journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(currentID);
+  if (idx > 0) undoTo(TRIP_ORDER[idx - 1]);
+});
+
+hudNext.addEventListener("click", () => {
+  if (!journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(currentID);
+  if (idx < TRIP_ORDER.length - 1) animateLeg(currentID, TRIP_ORDER[idx + 1]);
+});
+
+/* ======================================================================= */
+/* ===================== POPUP NAV HANDLERS =============================== */
+/* ======================================================================= */
+
+document.addEventListener("click", ev => {
+  const a = ev.target.closest(".trip-popup-nav-link");
+  if (!a) return;
+
+  if (a.dataset.reset) {
+    resetJourney();
+    return;
+  }
+
+  const dir = a.dataset.dir;
+  const tgt = a.dataset.target;
+
+  if (!dir || !tgt) return;
+
+  if (!journeyMode) {
+    openPopupFor(tgt);
+    map.easeTo({ center: getWP(tgt).coords, zoom: getZoom(tgt), duration: 800 });
+    currentID = tgt;
+    return;
+  }
+
+  if (dir === "next") animateLeg(currentID, tgt);
+  else if (dir === "prev") undoTo(tgt);
+});
+
+/* ======================================================================= */
+/* =================== BUILD COMPLETED ROUTE TO POINT ===================== */
+/* ======================================================================= */
+
+function buildCompleteUntil(id) {
+  const out = { flight: [], drive: [] };
+  const append = (arr, seg) => {
+    if (!seg.length) return;
+    if (!arr.length) arr.push(...seg);
+    else arr.push(...seg.slice(1));
+  };
+
+  const idx = TRIP_ORDER.indexOf(id);
+
+  for (let i = 0; i < idx; i++) {
+    const a = TRIP_ORDER[i];
+    const b = TRIP_ORDER[i + 1];
+
+    if (isFlight(a, b)) {
+      append(out.flight, buildGreatCircle(a, b));
+    } else {
+      append(out.drive, roadLeg(a, b));
+    }
+  }
+
+  return out;
+}
+
+/* ======================================================================= */
+/* ======================== JOURNEY ANIMATION ============================= */
+/* ======================================================================= */
+
+function animateLeg(a, b) {
+  if (a === b) return;
+
+  const isF = isFlight(a, b);
+  const seg = isF ? buildGreatCircle(a, b) : roadLeg(a, b);
+
+  if (!seg.length) return;
+
+  const srcF = map.getSource("journey-flight");
+  const srcD = map.getSource("journey-drive");
+  const srcC = map.getSource("journey-current");
+
+  if (!srcF || !srcD || !srcC) return;
+
+  const comp = buildCompleteUntil(a);
+  srcF.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: comp.flight }});
+  srcD.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: comp.drive }});
+
+  const partialColor = isF ? "#478ED3" : "#FF9C57";
+  map.setPaintProperty("journey-current", "line-color", partialColor);
+  map.setPaintProperty("journey-current", "line-width", isF ? 3 : 4);
+  map.setPaintProperty("journey-current", "line-dasharray", isF ? [3, 2] : [1, 0]);
+
+  const zoom = isF ? 4 : 9.4;
+  const duration = isF ? 4200 : 1800;
+
+  let start = performance.now();
+  const total = seg.length;
+
+  function frame(t) {
+    const prog = Math.min((t - start) / duration, 1);
+    const count = Math.max(2, Math.floor(prog * total));
+    const partial = seg.slice(0, count);
+
+    srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: partial }});
+
+    /* Stable camera follow — NO easeTo spam */
+    const mid = partial[partial.length - 1];
+    map.setCenter(mid);
+    map.setZoom(zoom);
+
+    if (prog < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      const after = buildCompleteUntil(b);
+      srcF.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: after.flight }});
+      srcD.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: after.drive }});
+      srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
+
+      openPopupFor(b);
+
+      map.easeTo({
+        center: getWP(b).coords,
+        zoom: getZoom(b),
+        duration: 900
+      });
+
+      currentID = b;
+      updateHUD();
+    }
+
+  map.flyTo({
+    center:endCenter,
+    zoom:zoom,
+    bearing: DEFAULT_BEARING,
+    pitch: DEFAULT_PITCH,
+    duration,
+    curve: isF ? 1.25 : 1.6,
+    speed: 0.4,
+    easing:t=>1-Math.pow(1-t,3)
+  });
+
+  requestAnimationFrame(frame);
+}
+
+/* ======================================================================= */
+/* ========================== UNDO LEG ==================================== */
+/* ======================================================================= */
+
+function undoTo(id) {
+  const srcF = map.getSource("journey-flight");
+  const srcD = map.getSource("journey-drive");
+  const srcC = map.getSource("journey-current");
+  if (!srcF || !srcD || !srcC) return;
+
+  const comp = buildCompleteUntil(id);
+  srcF.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: comp.flight }});
+  srcD.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: comp.drive }});
+  srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
+
+  openPopupFor(id);
+
+  map.easeTo({
+    center: getWP(id).coords,
+    zoom: getZoom(id),
+    duration: 800
+  });
+
+  currentID = id;
+  updateHUD();
+}
+
+/* ======================================================================= */
+/* ======================== RESET MAP / JOURNEY =========================== */
+/* ======================================================================= */
+
+function resetJourney() {
+  if (!MAP_READY) return;
+
+  journeyMode = false;
+  spinning = true;
+  userInterrupted = false;
+  currentID = null;
+
+  document.getElementById("journeyToggle").textContent = "Start Journey";
+  document.getElementById("resetStaticMap").style.display = "none";
+
+  closeAllPopups();
+
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, "visibility", "none");
+      const src = map.getSource(id);
+      if (src) src.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
     }
   });
 
+  if (map.getLayer("flight-route"))
+    map.setLayoutProperty("flight-route","visibility","visible");
+  if (map.getLayer("drive-route"))
+    map.setLayoutProperty("drive-route","visibility","visible");
+
+  map.jumpTo({
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0
+  });
+
+  spinGlobe();
+  updateHUD();
+}
+
+/* Reset Map in static mode */
+document.getElementById("resetStaticMap").addEventListener("click", () => {
+  if (journeyMode) return;
+
+  userInterrupted = false;
+  spinning = true;
+
+  closeAllPopups();
+
+  map.jumpTo({
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0
+  });
+
+  spinGlobe();
+  document.getElementById("resetStaticMap").style.display = "none";
+});
+
+/* ======================================================================= */
+/* ======================== JOURNEY TOGGLE ================================ */
+/* ======================================================================= */
+
+document.getElementById("journeyToggle").addEventListener("click", () => {
+  if (journeyMode) resetJourney();
+  else startJourney();
+});
+
+function startJourney() {
+  if (!MAP_READY) return;
+
+  journeyMode = true;
+  spinning = false;
+  userInterrupted = true;
+
+  document.getElementById("journeyToggle").textContent = "Reset Journey";
+  document.getElementById("resetStaticMap").style.display = "none";
+
+  currentID = TRIP_ORDER[0];
+
+  if (map.getLayer("flight-route"))
+    map.setLayoutProperty("flight-route","visibility","none");
+  if (map.getLayer("drive-route"))
+    map.setLayoutProperty("drive-route","visibility","none");
+
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    if (map.getLayer(id))
+      map.setLayoutProperty(id,"visibility","visible");
+    const src = map.getSource(id);
+    if (src)
+      src.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
+  });
+
   map.easeTo({
-    center:getWP(currentID).coords,
-    zoom:getZoom(currentID),
-    bearing: DEFAULT_BEARING,
-    pitch: DEFAULT_PITCH,
-    duration:1600
+    center: getWP(currentID).coords,
+    zoom: getZoom(currentID),
+    duration: 1200
   });
 
   openPopupFor(currentID);
   updateHUD();
 }
 
-function resetJourney(){
-  if(!MAP_READY) return;
-
-  journeyMode=false;
-  spinning=true;
-  userInterrupted=false;
-
-  document.getElementById("journeyToggle").textContent="Start Journey";
-  document.getElementById("resetStaticMap").style.display="none";
-
-  ["journey-flight","journey-drive","journey-current"].forEach(id=>{
-    if(map.getLayer(id)){
-      map.setLayoutProperty(id,"visibility","none");
-      const src=map.getSource(id);
-      if(src){
-        src.setData({type:"Feature",geometry:{type:"LineString",coordinates:[]}});
-      }
-    }
-  });
-
-  if(map.getLayer("flight-route")) map.setLayoutProperty("flight-route","visibility","visible");
-  if(map.getLayer("drive-route"))  map.setLayoutProperty("drive-route","visibility","visible");
-
-  closeAllPopups();
-
-  resetCamera();
-
-  spinGlobe();
-  updateHUD();
-}
-
-/* RESET MAP IN STATIC MODE */
-document.getElementById("resetStaticMap").addEventListener("click",()=>{
-  if(journeyMode) return;
-
-  userInterrupted=false;
-  spinning=true;
-
-  closeAllPopups();
-
-  resetCamera();
-
-  spinGlobe();
-  document.getElementById("resetStaticMap").style.display="none";
-});
-
-/* HUD */
-function updateHUD(){
-  if(!journeyMode){
-    hud.style.display="none";
-    return;
-  }
-
-  hud.style.display="block";
-
-  const idx=TRIP_ORDER.indexOf(currentID);
-  const prev = idx>0 ? TRIP_ORDER[idx-1] : null;
-  const next = idx<TRIP_ORDER.length-1 ? TRIP_ORDER[idx+1] : null;
-
-  hudPrev.disabled = !prev;
-
-  if(next){
-    const d=LEG_DIST[currentID];
-    let dist="";
-    if(d) dist=` – ${d.mi}mi (${d.km}km)`;
-    hudNext.textContent="Next Stop"+dist;
-    hudNext.disabled=false;
-  } else {
-    hudNext.textContent="Next Stop";
-    hudNext.disabled=true;
-  }
-
-  if(next){
-    const mode=getLegMode(currentID);
-    const icon=MODE_ICONS[mode];
-    const wp=getWP(next);
-    hudLabel.innerHTML =
-      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(wp.location)} ` +
-      `<span class="hud-flag hud-flag-${wp.country}"></span>`;
-  } else {
-    hudLabel.textContent="";
-  }
-}
-
-hudPrev.addEventListener("click",()=>{
-  if(!journeyMode) return;
-  const idx=TRIP_ORDER.indexOf(currentID);
-  if(idx>0) undoTo(TRIP_ORDER[idx-1]);
-});
-
-hudNext.addEventListener("click",()=>{
-  if(!journeyMode) return;
-  const idx=TRIP_ORDER.indexOf(currentID);
-  if(idx<TRIP_ORDER.length-1) animateLeg(currentID,TRIP_ORDER[idx+1]);
-});
-
 /* ======================================================================= */
-/* ===================== POPUP NAV ======================================= */
+/* ========================== INIT ON LOAD ================================ */
 /* ======================================================================= */
 
-document.addEventListener("click",ev=>{
-  const a=ev.target.closest(".trip-popup-nav-link");
-  if(!a) return;
-
-  if(a.dataset.reset){
-    resetJourney();
-    return;
-  }
-
-  const dir=a.dataset.dir;
-  const tgt=a.dataset.target;
-  if(!dir || !tgt) return;
-
-  if(!journeyMode){
-    openPopupFor(tgt);
-    map.easeTo({center:getWP(tgt).coords,zoom:getZoom(tgt),duration:1200});
-    currentID=tgt;
-    return;
-  }
-
-  if(dir==="next") animateLeg(currentID,tgt);
-  else if(dir==="prev") undoTo(tgt);
-});
-
-/* ======================================================================= */
-/* ====================== JOURNEY ANIMATION ============================== */
-/* ======================================================================= */
-
-function buildCompleteUntil(id){
-  const out={ flight:[], drive:[] };
-  const append=(arr,seg)=>{
-    if(!seg.length) return;
-    if(!arr.length) arr.push(...seg);
-    else arr.push(...seg.slice(1));
-  };
-
-  const idx=TRIP_ORDER.indexOf(id);
-  for(let i=0;i<idx;i++){
-    const a=TRIP_ORDER[i], b=TRIP_ORDER[i+1];
-    if(isFlight(a,b)){
-      append(out.flight, buildFlightSegment(a,b));
-    } else {
-      append(out.drive, roadLeg(a,b));
-    }
-  }
-  return out;
-}
-
-function roadLeg(a,b){
-  if(!DRIVING_GEOM.length) return [];
-  let s=DRIVE_INDEX[a], e=DRIVE_INDEX[b];
-  if(typeof s!=="number" || typeof e!=="number") return [];
-  if(s>e) [s,e]=[e,s];
-  return DRIVING_GEOM.slice(s,e+1);
-}
-
-function lerp(a,b,t){
-  return a+(b-a)*t;
-}
-
-function interpolateLngLat(a,b,t){
-  let [lng1,lat1]=a;
-  let [lng2,lat2]=b;
-  let diff=lng2-lng1;
-  if(diff>180) lng2-=360;
-  if(diff<-180) lng2+=360;
-  return [lerp(lng1,lng2,t), lerp(lat1,lat2,t)];
-}
-
-function animateLeg(a,b){
-  if(a===b) return;
-
-  const isF = isFlight(a,b);
-  const seg = isF ? buildFlightSegment(a,b) : roadLeg(a,b);
-
-  if(!seg.length) return;
-
-  const srcF=map.getSource("journey-flight");
-  const srcD=map.getSource("journey-drive");
-  const srcC=map.getSource("journey-current");
-
-  if(!srcF || !srcD || !srcC) return;
-
-  const comp=buildCompleteUntil(a);
-  srcF.setData({type:"Feature",geometry:{type:"LineString",coordinates:comp.flight}});
-  srcD.setData({type:"Feature",geometry:{type:"LineString",coordinates:comp.drive}});
-
-  map.setPaintProperty("journey-current","line-color", isF ? "#478ED3" : "#FF9C57");
-  map.setPaintProperty("journey-current","line-dasharray", isF ? [3,2] : [1,0]);
-
-  const zoom = isF ? 4.2 : 9.2;
-  const duration = isF ? 4500 : 2600;
-
-  const startCenter = seg[0];
-  const endCenter = seg[seg.length-1];
-  const startZoom = map.getZoom();
-
-  let start = performance.now();
-  const total = seg.length;
-
-  function frame(t){
-    const prog=Math.min((t-start)/duration,1);
-    const eased = 1-Math.pow(1-prog,3);
-    const count=Math.max(2,Math.floor(prog*total));
-    const partial = seg.slice(0,count);
-
-    srcC.setData({type:"Feature",geometry:{type:"LineString",coordinates:partial}});
-
-    const camCenter = interpolateLngLat(startCenter,endCenter,eased);
-    const camZoom = lerp(startZoom, zoom, eased);
-    map.easeTo({
-      center: camCenter,
-      zoom: camZoom,
-      bearing: DEFAULT_BEARING,
-      pitch: DEFAULT_PITCH,
-      duration:0,
-      easing: t=>t
-    });
-
-    if(prog<1){
-      requestAnimationFrame(frame);
-    } else {
-      const after=buildCompleteUntil(b);
-      srcF.setData({type:"Feature",geometry:{type:"LineString",coordinates:after.flight}});
-      srcD.setData({type:"Feature",geometry:{type:"LineString",coordinates:after.drive}});
-      srcC.setData({type:"Feature",geometry:{type:"LineString",coordinates:[]}});
-
-      openPopupFor(b);
-        map.easeTo({
-          center:getWP(b).coords,
-          zoom:getZoom(b),
-          bearing: DEFAULT_BEARING,
-          pitch: DEFAULT_PITCH,
-          duration:900
-        });
-
-        currentID=b;
-        updateHUD();
-      }
-    }
-
-  requestAnimationFrame(frame);
-}
-
-function undoTo(id){
-  const srcF=map.getSource("journey-flight");
-  const srcD=map.getSource("journey-drive");
-  const srcC=map.getSource("journey-current");
-  if(!srcF || !srcD || !srcC) return;
-
-  const comp=buildCompleteUntil(id);
-  srcF.setData({type:"Feature",geometry:{type:"LineString",coordinates:comp.flight}});
-  srcD.setData({type:"Feature",geometry:{type:"LineString",coordinates:comp.drive}});
-  srcC.setData({type:"Feature",geometry:{type:"LineString",coordinates:[]}});
-
-  openPopupFor(id);
-
-  map.easeTo({
-    center:getWP(id).coords,
-    zoom:getZoom(id),
-    bearing: DEFAULT_BEARING,
-    pitch: DEFAULT_PITCH,
-    duration:900
-  });
-
-  currentID=id;
-  updateHUD();
-}
-
-/* ======================================================================= */
-/* ====================== MAP LOAD & INIT ================================ */
-/* ======================================================================= */
-
-map.on("load", async ()=>{
+map.on("load", async () => {
   initDistances();
 
   await addNation("aus","https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json","#1561CF",0.12);
@@ -1396,40 +1329,32 @@ map.on("load", async ()=>{
   spinGlobe();
 });
 
-/* Journey Toggle */
-document.getElementById("journeyToggle").addEventListener("click",()=>{
-  if(journeyMode) resetJourney();
-  else startJourney();
-});
-
-/* Add journey-only route sources */
-function addJourneySources(){
-  ["journey-flight","journey-drive","journey-current"].forEach(id=>{
-    map.addSource(id,{
-      type:"geojson",
-      data:{type:"Feature",geometry:{type:"LineString",coordinates:[]}},
-      lineMetrics:true,
-      wrap:false
+/* Add empty journey polyline sources */
+function addJourneySources() {
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    map.addSource(id, {
+      type: "geojson",
+      data: { type:"Feature", geometry:{ type:"LineString", coordinates: [] }}
     });
 
     map.addLayer({
-      id:id,
-      type:"line",
-      source:id,
-      layout:{visibility:"none","line-cap":"round","line-join":"round"},
-      paint:{
-        "line-color":"#FF9C57",
-        "line-width":4,
-        "line-opacity":0.95
+      id,
+      type: "line",
+      source: id,
+      layout: { "visibility": "none", "line-cap":"round", "line-join":"round" },
+      paint: {
+        "line-color": "#FF9C57",
+        "line-width": 4,
+        "line-opacity": 0.95
       }
     });
   });
 
-  map.setPaintProperty("journey-flight","line-color","#478ED3");
-  map.setPaintProperty("journey-flight","line-dasharray",[3,2]);
-  map.setPaintProperty("journey-flight","line-width",3);
+  /* Flight layer dashed */
+  map.setPaintProperty("journey-flight", "line-color", "#478ED3");
+  map.setPaintProperty("journey-flight", "line-dasharray", [3, 2]);
+  map.setPaintProperty("journey-flight", "line-width", 3);
 }
 </script>
-
 </body>
 </html>
