@@ -188,6 +188,11 @@
       background-position: center;
     }
 
+    /* Popup country flags */
+    .trip-flag-au { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/au.svg"); }
+    .trip-flag-ca { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg"); }
+    .trip-flag-us { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg"); }
+
     .trip-popup-body {
       margin-top: 10px;
       font-size: 12px;
@@ -377,6 +382,8 @@ mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZ
 
 const DEFAULT_CENTER = [-150, 0];
 const DEFAULT_ZOOM   = 2.4;
+const DEFAULT_BEARING = 0;
+const DEFAULT_PITCH   = 0;
 
 let spinning = true;
 let userInterrupted = false;
@@ -385,6 +392,21 @@ let currentID = null;
 let MAP_READY = false;
 
 const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
+
+function resetCamera(animate=true){
+  const opts={
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    bearing: DEFAULT_BEARING,
+    pitch: DEFAULT_PITCH
+  };
+
+  if(animate){
+    map.easeTo({...opts,duration:1500});
+  } else {
+    map.jumpTo(opts);
+  }
+}
 
 const MODE_ICONS = {
   Plane: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
@@ -629,7 +651,7 @@ const map = new mapboxgl.Map({
   style: "mapbox://styles/mapbox/dark-v11",
   center: DEFAULT_CENTER,
   zoom: DEFAULT_ZOOM,
-  pitch: 0,
+  pitch: DEFAULT_PITCH,
   renderWorldCopies: false,
   projection: "globe"
 });
@@ -647,12 +669,8 @@ function spinGlobe() {
   const currentBearing = map.getBearing();
   const newBearing = currentBearing - 0.02;
 
-  // Keep pitch slight for realism (0 → 20 oscillation)
-  const t = Date.now() * 0.00005;
-  const pitch = 10 + Math.sin(t) * 3;
-
   map.setBearing(newBearing);
-  map.setPitch(pitch);
+  map.setPitch(DEFAULT_PITCH);
 
   requestAnimationFrame(spinGlobe);
 }
@@ -1038,6 +1056,8 @@ function startJourney(){
   map.easeTo({
     center:getWP(currentID).coords,
     zoom:getZoom(currentID),
+    bearing: DEFAULT_BEARING,
+    pitch: DEFAULT_PITCH,
     duration:1600
   });
 
@@ -1070,11 +1090,7 @@ function resetJourney(){
 
   closeAllPopups();
 
-  map.easeTo({
-    center:DEFAULT_CENTER,
-    zoom:DEFAULT_ZOOM,
-    duration:1500
-  });
+  resetCamera();
 
   spinGlobe();
   updateHUD();
@@ -1089,11 +1105,7 @@ document.getElementById("resetStaticMap").addEventListener("click",()=>{
 
   closeAllPopups();
 
-  map.easeTo({
-    center:DEFAULT_CENTER,
-    zoom:DEFAULT_ZOOM,
-    duration:1500
-  });
+  resetCamera();
 
   spinGlobe();
   document.getElementById("resetStaticMap").style.display="none";
@@ -1245,12 +1257,8 @@ function animateLeg(a,b){
 
     // Camera follows arc
     const mid = partial[partial.length-1];
-    map.easeTo({
-      center:mid,
-      zoom:zoom,
-      duration:300,
-      essential:false
-    });
+    map.setCenter(mid);
+    map.setZoom(zoom);
 
     if(prog<1){
       requestAnimationFrame(frame);
@@ -1264,6 +1272,8 @@ function animateLeg(a,b){
       map.easeTo({
         center:getWP(b).coords,
         zoom:getZoom(b),
+        bearing: DEFAULT_BEARING,
+        pitch: DEFAULT_PITCH,
         duration:900
       });
 
@@ -1291,6 +1301,8 @@ function undoTo(id){
   map.easeTo({
     center:getWP(id).coords,
     zoom:getZoom(id),
+    bearing: DEFAULT_BEARING,
+    pitch: DEFAULT_PITCH,
     duration:900
   });
 
@@ -1330,7 +1342,9 @@ function addJourneySources(){
   ["journey-flight","journey-drive","journey-current"].forEach(id=>{
     map.addSource(id,{
       type:"geojson",
-      data:{type:"Feature",geometry:{type:"LineString",coordinates:[]}}
+      data:{type:"Feature",geometry:{type:"LineString",coordinates:[]}},
+      lineMetrics:true,
+      wrap:false
     });
 
     map.addLayer({
