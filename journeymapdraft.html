@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>North America Trip – Donation Route (Mapbox Final)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Mapbox GL -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+
+  <!-- Mapbox Supercluster + Spiderfier -->
+  <script src="https://cdn.jsdelivr.net/npm/supercluster@8.0.1/dist/supercluster.min.js"></script>
+  <script src="https://unpkg.com/mapboxgl-spiderifier@1.2.1/dist/mapboxgl-spiderifier.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/mapboxgl-spiderifier@1.2.1/dist/mapboxgl-spiderifier.min.css"/>
+
+  <style>
+    @font-face {
+      font-family: "RechargeBd";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Recharge%20Bd.otf") format("opentype");
+      font-weight: 700;
+    }
+
+    @font-face {
+      font-family: "SuiGenerisRg";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Sui%20Generis%20Rg.otf") format("opentype");
+      font-weight: 400;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      background: #05060a;
+      overflow: hidden;
+      font-family: "SuiGenerisRg", system-ui;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ===== OVERLAY PANEL ===== */
+    .trip-overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      padding: 10px 14px;
+      background: rgba(5, 6, 10, 0.9);
+      border-radius: 10px;
+      border: 1px solid #606060;
+      box-shadow: 0 0 10px rgba(0,0,0,0.8);
+      max-width: 320px;
+      color: #a3a3a3;
+    }
+
+    .trip-overlay-title {
+      font-family: "RechargeBd";
+      font-size: 18px;
+      letter-spacing: 0.06em;
+      color: #f0f0f0;
+      text-transform: uppercase;
+    }
+
+    .trip-overlay-subtitle {
+      font-size: 13px;
+      color: #a3a3a3;
+      margin-top: 4px;
+      margin-bottom: 10px;
+    }
+
+    .trip-legend-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+      font-size: 11px;
+      color: #a3a3a3;
+    }
+
+    .legend-line {
+      width: 22px;
+      border-top: 2px dashed #478ed3;
+    }
+
+    .legend-line-drive {
+      border-top: 2px solid #ff9c57;
+    }
+
+	.legend-dot {
+	  width: 10px;
+	  height: 10px;
+	  border-radius: 50%;
+	  background: radial-gradient(circle at 30% 30%, #fff, #fff 40%, rgba(255,255,255,0.1) 70%);
+	}
+
+
+    /* ===== POPUPS ===== */
+    .mapboxgl-popup-content {
+      background-color: #101119;
+      border: 1px solid #606060;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: "SuiGenerisRg", system-ui;
+    }
+
+    .trip-popup-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: "RechargeBd";
+      font-size: 14px;            /* ~15% smaller */
+      color: #f0f0f0;
+    }
+
+    .trip-popup-title-icon {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+    }
+
+    .trip-popup-location {
+      font-family: "SuiGenerisRg", system-ui;
+      font-size: 12px;
+      opacity: 0.85;
+      color: #a3a3a3;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .trip-popup-flag {
+      width: 16px;
+      height: 12px;
+      border-radius: 2px;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 0 2px rgba(0,0,0,0.7);
+    }
+
+    .trip-flag-au { background-image: url("https://flagcdn.com/au.svg"); }
+    .trip-flag-ca { background-image: url("https://flagcdn.com/ca.svg"); }
+    .trip-flag-us { background-image: url("https://flagcdn.com/us.svg"); }
+
+    .trip-popup-body {
+      font-family: "SuiGenerisRg", system-ui;
+      font-size: 13px;
+      line-height: 1.35;
+      color: #a3a3a3;
+    }
+
+    /* ===== MARKERS ===== */
+    .trip-marker {
+      transform: translate(-50%, -100%);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .trip-marker img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .trip-marker.departure,
+    .trip-marker.destination,
+    .trip-marker.toronto {
+      width: 42px;
+      height: 42px;
+    }
+
+    .trip-marker.major {
+      width: 24px;
+      height: 24px;
+    }
+
+    .trip-marker.minor {
+      width: 18px;
+      height: 18px;
+    }
+
+    @keyframes trip-bounce {
+      0%,20%,50%,80%,100% { transform: translate(-50%, -100%) translateY(0); }
+      40% { transform: translate(-50%, -100%) translateY(-8px); }
+      60% { transform: translate(-50%, -100%) translateY(-4px); }
+    }
+
+    .trip-marker.bounce {
+      animation: trip-bounce 0.6s ease-out;
+    }
+
+
+    /* ===== CLUSTER BUBBLES ===== */
+    .cluster-bubble {
+      width: 34px;
+      height: 34px;
+      background: #05060a;
+      border-radius: 50%;
+      border: 2px solid #136AE8;
+      box-shadow: 0 0 8px rgba(19,106,232,0.7);
+      color: #f0f0f0;
+      font-family: "RechargeBd";
+      font-size: 14px;
+      line-height: 34px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .cluster-bubble:hover {
+      transform: scale(1.06);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <div class="trip-overlay">
+    <div class="trip-overlay-title">North America Trip Route</div>
+    <div class="trip-overlay-subtitle">
+      Sydney → L.A. → Toronto flights, then road trip via Buffalo, NYC & Jersey City to Newark.
+    </div>
+    <div class="trip-legend-row"><span class="legend-line"></span>Flights</div>
+    <div class="trip-legend-row"><span class="legend-line legend-line-drive"></span>Driving Route</div>
+    <div class="trip-legend-row"><span class="legend-dot"></span>Waypoints</div>
+  </div>
+
+  <script>
+    mapboxgl.accessToken =
+      "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
+
+    /* ============================================================
+       WAYPOINTS  — REAL EARTH COORDINATES
+    ============================================================ */
+
+	/* ===== WAYPOINTS BLOCK (FULL) ===== */
+	const WAYPOINTS = [
+	  {
+		id: "sydney",
+		role: "departure",
+		country: "au",
+		coords: [151.2093, -33.8688],
+		name: "Departure – Sydney",
+		location: "Sydney, Australia",
+		body: "Flying out of Sydney to begin the North America leg of this campaign.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/AUpin.svg"
+	  },
+	  {
+		id: "la",
+		role: "major",
+		country: "us",
+		coords: [-118.403616889565, 33.94247880317191],
+		name: "Major Waypoint – Los Angeles",
+		location: "Los Angeles International Airport (LAX)",
+		body: "Stopover at LAX before continuing to Toronto.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/MajorWP2.svg"
+	  },
+	  {
+		id: "toronto",
+		role: "toronto",
+		country: "ca",
+		coords: [-79.3832, 43.6532],
+		name: "Arrival – Toronto",
+		location: "Toronto, Canada",
+		body: "Meeting Shawn and starting road trip.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/CANpin.svg"
+	  },
+
+	  /* ---------- MINOR WAYPOINTS ---------- */
+	  {
+		id: "hamilton", role: "minor", country: "ca",
+		coords: [-79.8711, 43.2557],
+		name: "Waypoint – Hamilton",
+		location: "Hamilton, Ontario",
+		body: "Passing Hamilton on the way to Niagara.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "niagarafalls", role: "minor", country: "ca",
+		coords: [-79.0849, 43.0896],
+		name: "Waypoint – Niagara Falls",
+		location: "Niagara Falls, Ontario",
+		body: "Crossing the border after Niagara.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "buffalo", role: "major", country: "us",
+		coords: [-78.73351075487278, 42.939737258147524],
+		name: "Major Waypoint – Buffalo",
+		location: "Buffalo Niagara Intl Airport",
+		body: "Picking up Gina flying in from Boston.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/MajorWP2.svg"
+	  },
+	  {
+		id: "batavia", role: "minor", country: "us",
+		coords: [-78.193, 42.9987],
+		name: "Waypoint – Batavia",
+		location: "Batavia NY",
+		body: "Small stop on I-90.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "rochester", role: "minor", country: "us",
+		coords: [-77.6088, 43.1566],
+		name: "Waypoint – Rochester",
+		location: "Rochester NY",
+		body: "Passing Rochester heading east.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "geneva", role: "minor", country: "us",
+		coords: [-76.9856, 42.8684],
+		name: "Waypoint – Geneva",
+		location: "Geneva NY",
+		body: "Finger Lakes waypoint.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "syracuse", role: "minor", country: "us",
+		coords: [-76.1474, 43.0481],
+		name: "Waypoint – Syracuse",
+		location: "Syracuse NY",
+		body: "Another major eastbound point.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "utica", role: "minor", country: "us",
+		coords: [-75.2327, 43.1009],
+		name: "Waypoint – Utica",
+		location: "Utica NY",
+		body: "Passing Utica on I-90.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "albany", role: "minor", country: "us",
+		coords: [-73.7562, 42.6526],
+		name: "Waypoint – Albany",
+		location: "Albany NY",
+		body: "New York’s state capital.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "kingston", role: "minor", country: "us",
+		coords: [-73.9974, 41.927],
+		name: "Waypoint – Kingston",
+		location: "Kingston NY",
+		body: "Hudson Valley waypoint.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "newburgh", role: "minor", country: "us",
+		coords: [-74.0104, 41.5034],
+		name: "Waypoint – Newburgh",
+		location: "Newburgh NY",
+		body: "Near Hudson bridge crossings.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "whiteplains", role: "minor", country: "us",
+		coords: [-73.7629, 41.033],
+		name: "Waypoint – White Plains",
+		location: "White Plains NY",
+		body: "Before entering NYC region.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+
+	  /* ---------- MAJOR / FINAL WAYPOINTS ---------- */
+	  {
+		id: "nyc", role: "major", country: "us",
+		coords: [-73.98518854058835, 40.758137170862625],
+		name: "Major Waypoint – New York City",
+		location: "Times Square",
+		body: "NYC before heading south.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/MajorWP2.svg"
+	  },
+	  {
+		id: "hoboken", role: "minor", country: "us",
+		coords: [-74.0324, 40.7433],
+		name: "Waypoint – Hoboken",
+		location: "Hoboken NJ",
+		body: "Passing through Hoboken waterfront on the way to Newark.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/waypoint.svg"
+	  },
+	  {
+		id: "newark",
+		role: "major",
+		country: "us",
+		coords: [-74.17061528310181, 40.733642619437724],
+		name: "Major Waypoint – Newark",
+		location: "Prudential Center",
+		body: "Meet-up with Amanda & Davey travelling in from Missouri.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/MajorWP2.svg"
+	  },
+	  {
+		id: "tomsriver",
+		role: "destination",
+		country: "us",
+		coords: [-74.1860310031107, 39.962545184644725],
+		name: "Final Destination – Toms River",
+		location: "179 NJ-37 East, Toms River NJ 08754",
+		body: "Final stop of the road trip campaign.",
+		icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/STARBARX.svg"
+	  }
+	];
+
+
+
+    /* ============================================================
+       MAP INIT
+    ============================================================ */
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/mapbox/dark-v11",
+      center: [200, 10],
+      zoom: 2.3,
+      renderWorldCopies: true,
+      projection: "mercator"
+    });
+
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
+
+    /* ============================================================
+       Escape HTML
+    ============================================================ */
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[c]));
+    }
+
+    /* ============================================================
+       Great-circle (Pacific force)
+    ============================================================ */
+    function greatCircleForcePacific(a, b, steps = 96) {
+      let [lon1, lat1] = a;
+      let [lon2, lat2] = b;
+
+      lat1 *= Math.PI / 180;
+      lon1 *= Math.PI / 180;
+      lat2 *= Math.PI / 180;
+      lon2 *= Math.PI / 180;
+
+      const d = 2 * Math.asin(Math.sqrt(
+        Math.sin((lat2 - lat1) / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) *
+        Math.sin((lon2 - lon1) / 2) ** 2
+      ));
+
+      const coords = [];
+
+      for (let i = 0; i <= steps; i++) {
+        const f = i / steps;
+
+        const A = Math.sin((1 - f) * d) / Math.sin(d);
+        const B = Math.sin(f * d) / Math.sin(d);
+
+        const x = A * Math.cos(lat1) * Math.cos(lon1) +
+                  B * Math.cos(lat2) * Math.cos(lon2);
+
+        const y = A * Math.cos(lat1) * Math.sin(lon1) +
+                  B * Math.cos(lat2) * Math.sin(lon2);
+
+        const z = A * Math.sin(lat1) + B * Math.sin(lat2);
+
+        const lat = Math.atan2(z, Math.sqrt(x * x + y * y));
+        const lon = Math.atan2(y, x);
+
+        let degLon = lon * 180 / Math.PI;
+        let degLat = lat * 180 / Math.PI;
+
+        if (degLon < 0) degLon += 360;
+
+        coords.push([degLon, degLat]);
+      }
+      return coords;
+    }
+
+    /* ============================================================
+       MAP LOAD
+    ============================================================ */
+    map.on("load", async () => {
+
+      /* cluster icon sprite (for bubbles) */
+      map.loadImage(
+        "data:image/svg+xml;base64," + btoa(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34">
+            <circle cx="17" cy="17" r="15" fill="#05060A" stroke="#136AE8" stroke-width="2"/>
+          </svg>
+        `),
+        (err, img) => {
+          if (!err && !map.hasImage("cluster-icon")) {
+            map.addImage("cluster-icon", img);
+          }
+        }
+      );
+
+      /* ======================================
+         Nation Layers
+      ====================================== */
+      await addNation("aus",
+        "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
+        "#1561CF", 0.15);
+
+      await addNation("can",
+        "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json",
+        "#CE2424", 0.15);
+
+      await addNation("usa",
+        "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json",
+        "#FFFFFF", 0.15);
+
+      /* ======================================
+         FLIGHT PATH
+      ====================================== */
+      const sydney = WAYPOINTS.find(w => w.id === "sydney").coords;
+      const lax = WAYPOINTS.find(w => w.id === "la").coords;
+      const toronto = WAYPOINTS.find(w => w.id === "toronto").coords;
+
+      const sydShift = [sydney[0] + 360, sydney[1]];
+      const laxShift = [lax[0] + 360, lax[1]];
+      const torShift = [toronto[0] + 360, toronto[1]];
+
+      const arc1 = greatCircleForcePacific(sydShift, laxShift);
+      const arc2 = greatCircleForcePacific(laxShift, torShift).slice(1);
+
+      const FLIGHT = [...arc1, ...arc2];
+
+      map.addSource("flight-route", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: FLIGHT }
+        }
+      });
+
+      map.addLayer({
+        id: "flight-route",
+        type: "line",
+        source: "flight-route",
+        paint: {
+          "line-color": "#478ED3",
+          "line-width": 3,
+          "line-dasharray": [3, 2],
+          "line-opacity": 0.9
+        }
+      });
+
+      /* ======================================
+         DRIVING ROUTE
+      ====================================== */
+      await addDrivingRoute();
+
+      /* ======================================
+         CLUSTERING + MARKERS
+      ====================================== */
+      setupMarkerClustering();
+
+// Final camera: centre over Pacific and show whole trip
+      map.setCenter([200, 20]);
+      map.setZoom(2.4);
+
+    });
+
+    /* ============================================================
+       Add Nation Fill
+    ============================================================ */
+    async function addNation(id, url, color, opacity) {
+      try {
+        let r = await fetch(url);
+        let g = await r.json();
+
+        map.addSource(id, { type: "geojson", data: g });
+
+        map.addLayer({
+          id: id + "-fill",
+          type: "fill",
+          source: id,
+          paint: {
+            "fill-color": color,
+            "fill-opacity": opacity
+          }
+        });
+
+        map.addLayer({
+          id: id + "-outline",
+          type: "line",
+          source: id,
+          paint: {
+            "line-color": color,
+            "line-width": 1.5
+          }
+        });
+
+      } catch (e) {
+        console.error("Nation load failure", id, e);
+      }
+    }
+
+	/* ===== Driving Route BLOCK (FULL) ===== */
+	async function addDrivingRoute() {
+
+	  const ORDER = [
+		"toronto","hamilton","niagarafalls","buffalo","batavia","rochester",
+		"geneva","syracuse","utica","albany","kingston","newburgh",
+		"whiteplains","nyc","hoboken","newark","tomsriver"
+	  ];
+
+	  const coords = ORDER.map(id => WAYPOINTS.find(w => w.id === id).coords);
+
+	  const realCoords = coords.map(c => {
+		if (c[0] > 180) return [c[0] - 360, c[1]];
+		return c;
+	  });
+
+	  const url =
+		"https://api.mapbox.com/directions/v5/mapbox/driving/" +
+		realCoords.map(c => c.join(",")).join(";") +
+		"?geometries=geojson&overview=full&access_token=" + mapboxgl.accessToken;
+
+	  try {
+		const res = await fetch(url);
+		const json = await res.json();
+
+		if (!json.routes?.length) return;
+
+		map.addSource("drive-route", {
+		  type: "geojson",
+		  data: { type: "Feature", geometry: json.routes[0].geometry }
+		});
+
+		map.addLayer({
+		  id: "drive-route",
+		  type: "line",
+		  source: "drive-route",
+		  paint: {
+			"line-color": "#FF9C57",
+			"line-width": 4,
+			"line-opacity": 0.95
+		  }
+		});
+
+	  } catch (e) {
+		console.error("DRIVING API FAILED:", e);
+	  }
+	}
+
+
+	/* ===== SIMPLE MARKER SETUP (REPLACES OLD setupMarkerClustering) ===== */
+	function setupMarkerClustering() {
+	  const buckets = {
+		minor: [],
+		major: [],
+		toronto: [],
+		departure: [],
+		destination: []
+	  };
+
+	  WAYPOINTS.forEach(w => {
+		const marker = makeMarker(w);
+
+		if (w.role === "minor") buckets.minor.push(marker);
+		else if (w.role === "major") buckets.major.push(marker);
+		else if (w.role === "toronto") buckets.toronto.push(marker);
+		else if (w.role === "departure") buckets.departure.push(marker);
+		else if (w.role === "destination") buckets.destination.push(marker);
+	  });
+
+	  function setZ(arr, z) {
+		arr.forEach(m => {
+		  const el = m.getElement && m.getElement();
+		  if (el) el.style.zIndex = String(z);
+		});
+	  }
+
+	  function applyZ() {
+		setZ(buckets.minor, 1);        // bottom
+		setZ(buckets.major, 2);
+		setZ(buckets.toronto, 3);
+		setZ(buckets.departure, 4);
+		setZ(buckets.destination, 5);  // top
+	  }
+
+	  function updateMinorVisibility() {
+		const zoom = map.getZoom();
+		const show = zoom >= 5; // only show minor waypoints when zoomed in
+		buckets.minor.forEach(m => {
+		  const el = m.getElement && m.getElement();
+		  if (el) el.style.display = show ? "block" : "none";
+		});
+	  }
+
+	  applyZ();
+	  updateMinorVisibility();
+	  map.on("zoom", updateMinorVisibility);
+	}
+
+
+
+
+	/* ============================================================
+	/* ===== Marker creation BLOCK (FULL, RETURNS MARKER) ===== */
+	function makeMarker(w) {
+	  const el = document.createElement("div");
+	  el.className = "trip-marker " + w.role;
+	  el.style.cursor = "pointer";
+	  el.innerHTML = `<img src="${w.icon}"/>`;
+
+	  setTimeout(() => {
+		el.classList.add("bounce");
+		setTimeout(() => el.classList.remove("bounce"), 600);
+	  }, 300);
+
+	  const popup = new mapboxgl.Popup({
+		offset: 28,
+		closeButton: true,
+		closeOnClick: true
+	  }).setHTML(`
+		<div class="trip-popup">
+		  <div class="trip-popup-title">
+			<img src="${w.icon}" class="trip-popup-title-icon" />
+			<span>${escapeHtml(w.name)}</span>
+		  </div>
+		  <div class="trip-popup-location">
+			<span>${escapeHtml(w.location)}</span>
+			<span class="trip-popup-flag trip-flag-${w.country}"></span>
+		  </div>
+		  <div class="trip-popup-body">${escapeHtml(w.body)}</div>
+		</div>
+	  `);
+
+	  const marker = new mapboxgl.Marker(el)
+		.setLngLat(w.coords)
+		.setPopup(popup)
+		.addTo(map);
+
+	  return marker;
+	}
+
+
+
+
+    /* ============================================================
+       (Unused but kept in case you want spiderfied clusters later)
+    ============================================================ */
+    function makeSpiderPin(props, coords) {
+      const div = document.createElement("div");
+      div.className = "trip-marker " + props.role;
+      div.innerHTML = `<img src="${props.icon}" />`;
+      return new mapboxgl.Marker(div).setLngLat(coords).addTo(map);
+    }
+
+	// === JS: if you keep openPopup for future cluster use, sync its markup too ===
+	function openPopup(feature, lngLat) {
+	  const p = feature.properties;
+
+	  new mapboxgl.Popup({ offset: 28 })
+		.setLngLat(lngLat)
+		.setHTML(`
+		  <div class="trip-popup">
+			<div class="trip-popup-title">
+			  <img src="${p.icon}" class="trip-popup-title-icon" />
+			  <span>${escapeHtml(p.name)}</span>
+			</div>
+			<div class="trip-popup-location">
+			  <span>${escapeHtml(p.location)}</span>
+			  <span class="trip-popup-flag trip-flag-${p.country}"></span>
+			</div>
+			<div class="trip-popup-body">${escapeHtml(p.body)}</div>
+		  </div>
+		`)
+		.addTo(map);
+	}
+
+
+  </script>
+</body>
+</html>
