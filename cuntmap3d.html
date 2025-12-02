@@ -390,6 +390,7 @@ let userInterrupted = false;
 let journeyMode = false;
 let currentID = null;
 let MAP_READY = false;
+let spinFrame = null;
 
 const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
 
@@ -663,16 +664,26 @@ map.addControl(new mapboxgl.NavigationControl({showCompass:false}));
 /* ======================================================================= */
 
 function spinGlobe() {
+  if (spinFrame) cancelAnimationFrame(spinFrame);
   if (!spinning || journeyMode) return;
 
-  // Earth rotates west → east = bearing decreases
-  const currentBearing = map.getBearing();
-  const newBearing = currentBearing - 0.02;
+  const step = () => {
+    if (!spinning || journeyMode) { spinFrame=null; return; }
 
-  map.setBearing(newBearing);
-  map.setPitch(DEFAULT_PITCH);
+    const bearing = (map.getBearing() - 0.05) % 360; // west → east drift
+    map.easeTo({
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      bearing,
+      pitch: DEFAULT_PITCH,
+      duration: 0,
+      easing: t => t
+    });
 
-  requestAnimationFrame(spinGlobe);
+    spinFrame = requestAnimationFrame(step);
+  };
+
+  step();
 }
 
 /* User interaction stops spin */
@@ -788,11 +799,35 @@ function greatCircleArc(a, b, steps=180){
 
     coords.push([lon, lat]);
   }
-  return coords;
+  return unwrapPath(coords);
+}
+
+function unwrapPath(coords){
+  const out=[];
+  let prev=null;
+  coords.forEach(pt=>{
+    let [lng,lat]=pt;
+    if(prev!==null){
+      const diff=lng-prev;
+      if(diff>180) lng-=360;
+      if(diff<-180) lng+=360;
+    }
+    out.push([lng,lat]);
+    prev=lng;
+  });
+  return out;
 }
 
 function buildFlightSegment(fromId, toId){
-  return greatCircleArc(getWP(fromId).coords, getWP(toId).coords);
+  const start = getWP(fromId).coords;
+  const end   = getWP(toId).coords.slice();
+
+  const diff = end[0] - start[0];
+  if (Math.abs(diff) > 180) {
+    end[0] += diff > 0 ? -360 : 360; // unwrap across the Pacific instead of the dateline zigzag
+  }
+
+  return greatCircleArc(start, end);
 }
 
 /* ======================================================================= */
@@ -1242,8 +1277,11 @@ function animateLeg(a,b){
   map.setPaintProperty("journey-current","line-color", isF ? "#478ED3" : "#FF9C57");
   map.setPaintProperty("journey-current","line-dasharray", isF ? [3,2] : [1,0]);
 
-  const zoom = isF ? 4 : 9.4;
-  const duration = isF ? 4000 : 1800;
+  const zoom = isF ? 4 : 9;
+  const duration = isF ? 4200 : 2200;
+
+  const startCenter = seg[0];
+  const endCenter = seg[seg.length-1];
 
   let start = performance.now();
   const total = seg.length;
@@ -1254,11 +1292,6 @@ function animateLeg(a,b){
     const partial = seg.slice(0,count);
 
     srcC.setData({type:"Feature",geometry:{type:"LineString",coordinates:partial}});
-
-    // Camera follows arc
-    const mid = partial[partial.length-1];
-    map.setCenter(mid);
-    map.setZoom(zoom);
 
     if(prog<1){
       requestAnimationFrame(frame);
@@ -1281,6 +1314,24 @@ function animateLeg(a,b){
       updateHUD();
     }
   }
+
+  map.easeTo({
+    center:startCenter,
+    zoom:zoom,
+    bearing: DEFAULT_BEARING,
+    pitch: DEFAULT_PITCH,
+    duration:300,
+    easing:t=>t
+  });
+
+  map.easeTo({
+    center:endCenter,
+    zoom:zoom,
+    bearing: DEFAULT_BEARING,
+    pitch: DEFAULT_PITCH,
+    duration,
+    easing:t=>1-Math.pow(1-t,3)
+  });
 
   requestAnimationFrame(frame);
 }
