@@ -392,6 +392,7 @@ let userInterrupted = false;
 let journeyMode = false;
 let currentID = null;
 let MAP_READY = false;
+let spinFrame = null;
 
 /* Which markers stay at all zoom levels */
 const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
@@ -485,7 +486,7 @@ const map = new mapboxgl.Map({
   style: "mapbox://styles/mapbox/dark-v11",
   center: DEFAULT_CENTER,
   zoom: DEFAULT_ZOOM,
-  pitch: 0,
+  pitch: DEFAULT_PITCH,
   renderWorldCopies: false,
   projection: "globe"
 });
@@ -497,6 +498,7 @@ map.addControl(new mapboxgl.NavigationControl({showCompass:false}));
 /* ======================================================================= */
 
 function spinGlobe() {
+  if (spinFrame) cancelAnimationFrame(spinFrame);
   if (!spinning || journeyMode) return;
 
   // Earth rotates west → east = longitude decreases
@@ -510,7 +512,7 @@ function spinGlobe() {
   map.setCenter([newLon, c.lat]);
   map.setPitch(pitch);
 
-  requestAnimationFrame(spinGlobe);
+  step();
 }
 
 /* Stop spin on user interaction */
@@ -1160,6 +1162,17 @@ function animateLeg(a, b) {
       updateHUD();
     }
   }
+
+  map.flyTo({
+    center:endCenter,
+    zoom:zoom,
+    bearing: DEFAULT_BEARING,
+    pitch: DEFAULT_PITCH,
+    duration,
+    curve: isF ? 1.25 : 1.6,
+    speed: 0.4,
+    easing:t=>1-Math.pow(1-t,3)
+  });
 
   requestAnimationFrame(frame);
 }
