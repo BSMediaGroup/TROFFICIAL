@@ -9,7 +9,7 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
-  <!-- Turf.js for robust great-circle calculation -->
+  <!-- Turf is no longer needed for great-circle, but leaving it is harmless -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <style>
@@ -191,7 +191,7 @@
       background-position: center;
     }
 
-    /* Popup country flags – these were missing before */
+    /* Popup country flags */
     .trip-flag-au { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/au.svg"); }
     .trip-flag-ca { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg"); }
     .trip-flag-us { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg"); }
@@ -375,6 +375,7 @@
   </div>
   <div id="hudLabel" class="journey-hud-label"></div>
 </div>
+
 <script>
 /* ======================================================================= */
 /* ========================== CONFIG & GLOBALS ============================ */
@@ -382,9 +383,8 @@
 
 mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
-const DEFAULT_CENTER = [245, 20];  
+const DEFAULT_CENTER = [245, 20];  // start with Australia in view (your choice)
 const DEFAULT_ZOOM   = 2.8;
-
 
 /* Spin state & journey state */
 let spinning = true;
@@ -392,7 +392,6 @@ let userInterrupted = false;
 let journeyMode = false;
 let currentID = null;
 let MAP_READY = false;
-let spinFrame = null;
 
 /* Which markers stay at all zoom levels */
 const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
@@ -486,7 +485,7 @@ const map = new mapboxgl.Map({
   style: "mapbox://styles/mapbox/dark-v11",
   center: DEFAULT_CENTER,
   zoom: DEFAULT_ZOOM,
-  pitch: DEFAULT_PITCH,
+  pitch: 0,
   renderWorldCopies: false,
   projection: "globe"
 });
@@ -498,7 +497,6 @@ map.addControl(new mapboxgl.NavigationControl({showCompass:false}));
 /* ======================================================================= */
 
 function spinGlobe() {
-  if (spinFrame) cancelAnimationFrame(spinFrame);
   if (!spinning || journeyMode) return;
 
   // Earth rotates west → east = longitude decreases
@@ -512,7 +510,7 @@ function spinGlobe() {
   map.setCenter([newLon, c.lat]);
   map.setPitch(pitch);
 
-  step();
+  requestAnimationFrame(spinGlobe);
 }
 
 /* Stop spin on user interaction */
@@ -578,102 +576,81 @@ function initDistances(){
 }
 
 /* ======================================================================= */
-/* =================== TRUE GREAT-CIRCLE (Turf.js) ======================== */
+/* =================== GREAT-CIRCLE WITHOUT TURF ========================= */
 /* ======================================================================= */
 
-/**
- * Build a perfect great-circle arc using Turf.js.
- * This solves ALL zigzag issues because Turf automatically:
- *   • unwraps longitudes correctly
- *   • prevents Africa-crossing artifacts
- *   • produces smooth great-circle geometry
- */
- 
- /* Safely normalize lon/lat into a single valid world copy */
 function normalizeCoord(lon, lat) {
-  // Guard against null/undefined/NaN
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-
-  // Normalize longitude into [-180, 180)
-  lon = ((lon + 180) % 360 + 360) % 360 - 180;
-
-  // Clamp latitude into safe range
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;     // [-180,180)
   lat = Math.max(-89.999999, Math.min(89.999999, lat));
-
   return [lon, lat];
 }
 
- 
+function toRad(deg){ return deg*Math.PI/180; }
+function toDeg(rad){ return rad*180/Math.PI; }
+
 /**
- * Build a perfect great-circle arc using Turf.js.
- * This solves ALL zigzag issues and avoids NaN coordinates.
+ * Robust great-circle using spherical interpolation.
+ * Always returns a smooth, single-copy arc (no Africa zigzag).
  */
-function buildGreatCircle(fromId, toId, steps = 200) {
-  const a = getWP(fromId).coords;
-  const b = getWP(toId).coords;
+function buildGreatCircle(fromId, toId, steps = 180) {
+  const [lon1d, lat1] = getWP(fromId).coords;
+  const [lon2d, lat2] = getWP(toId).coords;
 
-  const line = turf.greatCircle(
-    [a[0], a[1]],
-    [b[0], b[1]],
-    { npoints: steps }
-  );
+  let λ1 = toRad(lon1d);
+  let λ2 = toRad(lon2d);
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
 
-  // Normalize & filter out any invalid coordinates
-  const coords = line.geometry.coordinates
-    .map(([lon, lat]) => normalizeCoord(lon, lat))
-    .filter(Boolean); // remove nulls
+  // Ensure we take the SHORT way around (handle dateline)
+  let dλ = λ2 - λ1;
+  if (Math.abs(dλ) > Math.PI) {
+    if (dλ > 0) {
+      λ1 += 2*Math.PI;
+    } else {
+      λ2 += 2*Math.PI;
+    }
+    dλ = λ2 - λ1;
+  }
 
-  // If Turf fails (edge case), fall back to manual arc interpolation
+  const Δ = 2 * Math.asin(Math.sqrt(
+    Math.sin((φ2-φ1)/2)**2 +
+    Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2
+  ));
+
+  if (!Number.isFinite(Δ) || Δ === 0) {
+    const p1 = normalizeCoord(lon1d, lat1);
+    const p2 = normalizeCoord(lon2d, lat2);
+    return [p1, p2].filter(Boolean);
+  }
+
+  const coords = [];
+  for (let i=0;i<=steps;i++){
+    const f = i/steps;
+    const A = Math.sin((1-f)*Δ)/Math.sin(Δ);
+    const B = Math.sin(f*Δ)/Math.sin(Δ);
+
+    const x = A*Math.cos(φ1)*Math.cos(λ1) + B*Math.cos(φ2)*Math.cos(λ2);
+    const y = A*Math.cos(φ1)*Math.sin(λ1) + B*Math.cos(φ2)*Math.sin(λ2);
+    const z = A*Math.sin(φ1) + B*Math.sin(φ2);
+
+    const φ = Math.atan2(z, Math.sqrt(x*x + y*y));
+    const λ = Math.atan2(y, x);
+
+    const lon = toDeg(λ);
+    const lat = toDeg(φ);
+    const norm = normalizeCoord(lon, lat);
+    if (norm) coords.push(norm);
+  }
+
   if (coords.length < 2) {
-    console.warn(
-      "Great-circle produced too few points for",
-      fromId, "→", toId,
-      "– using manual fallback.",
-      coords
-    );
-    return manualFallbackArc(a, b, steps);
+    const p1 = normalizeCoord(lon1d, lat1);
+    const p2 = normalizeCoord(lon2d, lat2);
+    return [p1, p2].filter(Boolean);
   }
 
   return coords;
 }
-
-/**
- * Manual fallback for great-circle using lon/lat interpolation.
- * Adjusts longitudes to follow the SHORT path across the dateline
- * (so Sydney → LAX goes over the Pacific, not over Africa).
- */
-function manualFallbackArc(a, b, steps = 200) {
-  const [lon1, lat1] = a;
-  const [lon2, lat2] = b;
-
-  let startLon = lon1;
-  let endLon   = lon2;
-
-  // If we cross more than 180° of longitude, wrap so we take the short way
-  let delta = endLon - startLon;
-  if (Math.abs(delta) > 180) {
-    if (delta > 0) {
-      startLon += 360;
-    } else {
-      endLon += 360;
-    }
-  }
-
-  const out = [];
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-
-    const lon = startLon + (endLon - startLon) * t;
-    const lat = lat1    + (lat2    - lat1)    * t;
-
-    const norm = normalizeCoord(lon, lat);
-    if (norm) out.push(norm);
-  }
-
-  return out;
-}
-
-
 
 /* ======================================================================= */
 /* ======================== STATIC ROUTE LAYERS =========================== */
@@ -715,13 +692,8 @@ function addStaticRoutes() {
 let DRIVING_GEOM = [];
 let DRIVE_INDEX  = {};
 
-/**
- * Builds the driving polyline via Mapbox Directions
- * and indexes nearest geometry points for each waypoint.
- */
 async function buildDrivingRoute() {
   const coords = DRIVE_ORDER.map(id => getWP(id).coords);
-
   if (coords.length < 2) return;
 
   const url =
@@ -731,13 +703,10 @@ async function buildDrivingRoute() {
 
   const res = await fetch(url);
   const json = await res.json();
-
   if (!json.routes || !json.routes.length) return;
 
-  // Full geometry
   DRIVING_GEOM = json.routes[0].geometry.coordinates;
 
-  // Add static driving layer
   map.addSource("drive-route", {
     type: "geojson",
     data: json.routes[0].geometry
@@ -754,7 +723,6 @@ async function buildDrivingRoute() {
     }
   });
 
-  // Build index mapping waypoint → nearest driving polyline point
   coords.forEach((wp, i) => {
     let bestIndex = 0;
     let bestDist = Infinity;
@@ -823,6 +791,7 @@ async function addNation(id, url, color, opacity) {
     console.error("Nation load error:", e);
   }
 }
+
 /* ======================================================================= */
 /* ============================ MARKERS =================================== */
 /* ======================================================================= */
@@ -837,7 +806,6 @@ function buildMarkers() {
     el.className = "trip-marker " + w.role;
     el.innerHTML = `<img src="${w.icon}">`;
 
-    // Entry animation
     setTimeout(() => el.classList.add("bounce"), 80);
 
     const popup = new mapboxgl.Popup({
@@ -869,7 +837,6 @@ function buildMarkers() {
 
   map.on("click", () => closeAllPopups());
 
-  /* Minor marker zoom visibility */
   function updateMinorMarkers() {
     const show = map.getZoom() >= 5;
     MINOR_MARKERS.forEach(m => {
@@ -1106,13 +1073,11 @@ function animateLeg(a, b) {
 
   const isF = isFlight(a, b);
   const seg = isF ? buildGreatCircle(a, b) : roadLeg(a, b);
-
   if (!seg.length) return;
 
   const srcF = map.getSource("journey-flight");
   const srcD = map.getSource("journey-drive");
   const srcC = map.getSource("journey-current");
-
   if (!srcF || !srcD || !srcC) return;
 
   const comp = buildCompleteUntil(a);
@@ -1127,6 +1092,14 @@ function animateLeg(a, b) {
   const zoom = isF ? 4 : 9.4;
   const duration = isF ? 4200 : 1800;
 
+  // Single smooth camera movement per leg
+  map.easeTo({
+    center: getWP(b).coords,
+    zoom: zoom,
+    duration: duration + 400,
+    essential: false
+  });
+
   let start = performance.now();
   const total = seg.length;
 
@@ -1137,11 +1110,6 @@ function animateLeg(a, b) {
 
     srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: partial }});
 
-    /* Stable camera follow — NO easeTo spam */
-    const mid = partial[partial.length - 1];
-    map.setCenter(mid);
-    map.setZoom(zoom);
-
     if (prog < 1) {
       requestAnimationFrame(frame);
     } else {
@@ -1151,27 +1119,10 @@ function animateLeg(a, b) {
       srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
 
       openPopupFor(b);
-
-      map.easeTo({
-        center: getWP(b).coords,
-        zoom: getZoom(b),
-        duration: 900
-      });
-
       currentID = b;
       updateHUD();
     }
-
-  map.flyTo({
-    center:endCenter,
-    zoom:zoom,
-    bearing: DEFAULT_BEARING,
-    pitch: DEFAULT_PITCH,
-    duration,
-    curve: isF ? 1.25 : 1.6,
-    speed: 0.4,
-    easing:t=>1-Math.pow(1-t,3)
-  });
+  }
 
   requestAnimationFrame(frame);
 }
