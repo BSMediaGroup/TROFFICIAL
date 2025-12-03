@@ -1383,36 +1383,46 @@ function buildCompleteUntil(id) {
 }
 
 
+
 /* ======================================================================= */
 /* ======================== JOURNEY ANIMATION ============================= */
 /* ======================================================================= */
 
+function makeLineFeature(coords) {
+  return {
+    type: "Feature",
+    geometry: {
+      type: "LineString",
+      coordinates: Array.isArray(coords) ? coords : []
+    }
+  };
+}
+
+
 function animateLeg(a, b) {
   if (a === b) return;
+  if (!map || !map.isStyleLoaded()) return;
 
-  stopOrbit();  // leave any previous orbit before animating leg
+  stopOrbit();  // stop any existing orbit immediately
 
   const isF = isFlight(a, b);
   const seg = isF ? buildGreatCircle(a, b) : roadLeg(a, b);
-  if (!seg.length) return;
+  if (!Array.isArray(seg) || seg.length === 0) return;
 
-  const srcF = map.getSource("journey-flight");
-  const srcD = map.getSource("journey-drive");
-  const srcC = map.getSource("journey-current");
+  const srcF  = map.getSource("journey-flight");
+  const srcD  = map.getSource("journey-drive");
+  const srcC  = map.getSource("journey-current");
+
   if (!srcF || !srcD || !srcC) return;
 
-  // Rebuild completed segments up to waypoint a
+  // Build completed segments up to A
   const comp = buildCompleteUntil(a);
-  srcF.setData({
-    type: "Feature",
-    geometry: { type: "LineString", coordinates: comp.flight }
-  });
-  srcD.setData({
-    type: "Feature",
-    geometry: { type: "LineString", coordinates: comp.drive }
-  });
 
-  // Styling for current leg being animated
+  srcF.setData(makeLineFeature(comp.flight));
+  srcD.setData(makeLineFeature(comp.drive));
+  srcC.setData(makeLineFeature([]));   // clear current leg
+
+  // Style the current leg line (flight vs road)
   const partialColor = isF ? "#478ED3" : "#FF9C57";
   map.setPaintProperty("journey-current", "line-color", partialColor);
   map.setPaintProperty("journey-current", "line-width", isF ? 3 : 4);
@@ -1420,115 +1430,130 @@ function animateLeg(a, b) {
 
   const duration = isF ? 4200 : 1800;
 
-  // Standard camera travel zoom levels
-  const FLIGHT_TRAVEL_ZOOM = 3.0;                      // wide, see whole arc
-  const ROAD_TRAVEL_ZOOM   = ORBIT_ZOOM_TARGET - 2.5;  // slight zoom-out (~10)
+  // Base travel zoom rules
+  const FLIGHT_TRAVEL_ZOOM = 3.0;                      // wide zoom for flights
+  const ROAD_TRAVEL_ZOOM   = ORBIT_ZOOM_TARGET - 2.5;  // light zoom-out for roads
+
+  const sydneyToLA = (a === "sydney" && b === "la");
+  const laToToronto = (a === "la" && b === "toronto");
 
   let travelZoom;
 
-  // SPECIAL-CASE SYDNEY → LA WITH 2-STAGE TRANSITION (same as start-journey fix)
-  const isSydneyToLA = (a === "sydney" && b === "la");
+  if (isF) {
+    if (laToToronto) {
+      // You asked for 50% reduced zoom-out here
+      travelZoom = (FLIGHT_TRAVEL_ZOOM + JOURNEY_ZOOM_LA) / 2;
+    } else {
+      travelZoom = FLIGHT_TRAVEL_ZOOM;
+    }
+  } else {
+    travelZoom = ROAD_TRAVEL_ZOOM;
+  }
 
-  if (isSydneyToLA) {
+  /* ======================================================================= */
+  /* ====================== SPECIAL CASE: SYDNEY → LA ====================== */
+  /* ======================================================================= */
 
-    const START_PAN_DURATION   = 1800;
-    const START_FOCUS_DURATION = 2200;
+  if (sydneyToLA) {
+    const smooth = t => t * t * (3 - 2 * t);
 
-    const laZoom = (b === "la") ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+    const Syd = getWP(a);
+    const LA  = getWP(b);
+    if (!Syd || !LA) return;
 
-    // STAGE 1 → zoom OUT from Sydney at flat pitch
+    const PHASE1 = 1600;   // zoom-out phase
+    const PHASE2 = 1600;   // wide pan phase
+    const PHASE3 = 2200;   // final focus-in phase
+
+    const finalZoom = JOURNEY_ZOOM_LA;
+
+    /* --------------------------- PHASE 1 -------------------------------- */
+    /* ------------------ Zoom OUT from Sydney safely ---------------------- */
+
     map.easeTo({
-      center: getWP(a).coords,
-      zoom: 3.5,                   // wide zoom to avoid clipping
+      center: Syd.coords,
+      zoom: 3.5,
       pitch: 0,
       bearing: map.getBearing(),
-      duration: START_PAN_DURATION,
-      easing: t => t * t * (3 - 2 * t)
+      duration: PHASE1,
+      easing: smooth
     });
 
-    // STAGE 2 → pan toward LA at wide zoom, still flat pitch
+    /* --------------------------- PHASE 2 -------------------------------- */
+    /* ------------------ Wide pan over Pacific toward LA ----------------- */
+
     setTimeout(() => {
       map.easeTo({
-        center: getWP(b).coords,
+        center: LA.coords,
         zoom: 3.5,
         pitch: 0,
         bearing: map.getBearing(),
-        duration: START_PAN_DURATION,
-        easing: t => t * t * (3 - 2 * t)
+        duration: PHASE2,
+        easing: smooth
       });
-    }, START_PAN_DURATION);
+    }, PHASE1);
 
-    // STAGE 3 → ease IN to LA journey focus (pitch 55, special LA zoom)
+    /* --------------------------- PHASE 3 -------------------------------- */
+    /* ----- Ease IN to LA journey focus (pitch 55° + correct zoom) -------- */
+
     setTimeout(() => {
       map.easeTo({
-        center: getWP(b).coords,
-        zoom: laZoom,
+        center: LA.coords,
+        zoom: finalZoom,
         pitch: JOURNEY_PITCH_TARGET,
         bearing: map.getBearing(),
-        duration: START_FOCUS_DURATION,
-        easing: t => t * t * (3 - 2 * t)
+        duration: PHASE3,
+        easing: smooth
       });
-    }, START_PAN_DURATION * 2);
+    }, PHASE1 + PHASE2);
 
-    // After all stages: start orbit
+    /* --------------------------- FINALIZE -------------------------------- */
+    /* ------ Apply new waypoint, start orbit, update HUD exactly ----------- */
+
     setTimeout(() => {
       currentID = b;
       openPopupFor(b);
       startOrbit(b);
       updateHUD();
-    }, START_PAN_DURATION * 2 + START_FOCUS_DURATION);
+    }, PHASE1 + PHASE2 + PHASE3);
 
-    // Animate polyline normally (no change)
+    /* ---------------------- Polyline Animation --------------------------- */
+
     const start = performance.now();
     const total = seg.length;
 
     function frame(t) {
-      const prog = Math.min((t - start) / duration, 1);
+      const prog  = Math.min((t - start) / duration, 1);
       const count = Math.max(2, Math.floor(prog * total));
       const partial = seg.slice(0, count);
 
-      srcC.setData({
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: partial }
-      });
+      srcC.setData(makeLineFeature(partial));
 
-      if (prog < 1) requestAnimationFrame(frame);
-      else {
+      if (prog < 1) {
+        requestAnimationFrame(frame);
+      } else {
         const after = buildCompleteUntil(b);
-        srcF.setData({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: after.flight }
-        });
-        srcD.setData({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: after.drive }
-        });
-        srcC.setData({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: [] }
-        });
+
+        srcF.setData(makeLineFeature(after.flight));
+        srcD.setData(makeLineFeature(after.drive));
+        srcC.setData(makeLineFeature([]));
       }
     }
 
     requestAnimationFrame(frame);
-    return; // IMPORTANT — do NOT process standard logic for this leg
+    return;
   }
 
-  // ---------------- NORMAL BEHAVIOUR FOR ALL OTHER LEGS ----------------
 
-  // FLIGHT or ROAD zoom-out levels
-  if (isF) {
-    const isLaToToronto = (a === "la" && b === "toronto");
-    travelZoom = isLaToToronto
-      ? (FLIGHT_TRAVEL_ZOOM + JOURNEY_ZOOM_LA) / 2
-      : FLIGHT_TRAVEL_ZOOM;
-  } else {
-    travelZoom = ROAD_TRAVEL_ZOOM;
-  }
+  /* ======================================================================= */
+  /* ======================= NORMAL JOURNEY BEHAVIOUR ====================== */
+  /* ======================================================================= */
 
-  // Standard travel animation (non-Sydney legs)
+  const targetWP = getWP(b);
+  if (!targetWP) return;
+
   map.easeTo({
-    center: getWP(b).coords,
+    center: targetWP.coords,
     zoom: travelZoom,
     pitch: 0,
     bearing: 0,
@@ -1536,7 +1561,6 @@ function animateLeg(a, b) {
     essential: false
   });
 
-  // Standard polyline animation
   const startStandard = performance.now();
   const totalStandard = seg.length;
 
@@ -1545,29 +1569,17 @@ function animateLeg(a, b) {
     const count = Math.max(2, Math.floor(prog * totalStandard));
     const partial = seg.slice(0, count);
 
-    srcC.setData({
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: partial }
-    });
+    srcC.setData(makeLineFeature(partial));
 
     if (prog < 1) {
       requestAnimationFrame(frameStandard);
     } else {
       const after = buildCompleteUntil(b);
-      srcF.setData({
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: after.flight }
-      });
-      srcD.setData({
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: after.drive }
-      });
-      srcC.setData({
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: [] }
-      });
 
-      // Standard arrival in journey mode
+      srcF.setData(makeLineFeature(after.flight));
+      srcD.setData(makeLineFeature(after.drive));
+      srcC.setData(makeLineFeature([]));
+
       openPopupFor(b);
       currentID = b;
       focusJourneyOrbit(b);
@@ -1577,6 +1589,7 @@ function animateLeg(a, b) {
 
   requestAnimationFrame(frameStandard);
 }
+
 
 
 
