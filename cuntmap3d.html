@@ -392,6 +392,9 @@ let userInterrupted = false;
 let journeyMode = false;
 let currentID = null;
 let MAP_READY = false;
+let orbiting = false;
+let orbitFrame = null;
+let orbitTarget = null;
 
 /* Which markers stay at all zoom levels */
 const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
@@ -490,6 +493,8 @@ const map = new mapboxgl.Map({
   projection: "globe"
 });
 
+map.doubleClickZoom.disable();
+
 map.addControl(new mapboxgl.NavigationControl({showCompass:false}));
 
 /* ======================================================================= */
@@ -513,12 +518,29 @@ function spinGlobe() {
   requestAnimationFrame(spinGlobe);
 }
 
+function stopOrbiting(restoreView = false) {
+  if (orbitFrame) cancelAnimationFrame(orbitFrame);
+  orbitFrame = null;
+  const targetCenter = orbitTarget;
+  orbitTarget = null;
+  const wasOrbiting = orbiting;
+  orbiting = false;
+
+  if (restoreView) {
+    const fallbackCenter = targetCenter || (currentID ? getWP(currentID).coords : null) || map.getCenter();
+    const fallbackZoom = currentID ? getFocusZoom(currentID, false) : map.getZoom();
+    const nextZoom = wasOrbiting ? fallbackZoom : map.getZoom();
+    map.easeTo({ center: fallbackCenter, zoom: nextZoom, pitch: 0, bearing: 0, duration: 800 });
+  }
+}
+
 /* Stop spin on user interaction */
-["mousedown","touchstart","wheel","keydown"].forEach(ev=>{
+["mousedown","touchstart","wheel","keydown","dragstart"].forEach(ev=>{
   map.on(ev, e =>{
     if(!e.originalEvent) return;
     spinning = false;
     userInterrupted = true;
+    stopOrbiting(false);
     if(!journeyMode){
       document.getElementById("resetStaticMap").style.display = "block";
     }
@@ -579,11 +601,29 @@ function initDistances(){
 /* =================== GREAT-CIRCLE WITHOUT TURF ========================= */
 /* ======================================================================= */
 
+function clampLat(lat) {
+  if (!Number.isFinite(lat)) return null;
+  return Math.max(-89.999999, Math.min(89.999999, lat));
+}
+
+function wrapLon(lon) {
+  if (!Number.isFinite(lon)) return null;
+  return ((lon + 180) % 360 + 360) % 360 - 180;
+}
+
+function anchorLon(lon, anchor) {
+  if (!Number.isFinite(lon)) return null;
+  let adjusted = lon;
+  while (adjusted - anchor > 180) adjusted -= 360;
+  while (adjusted - anchor < -180) adjusted += 360;
+  return adjusted;
+}
+
 function normalizeCoord(lon, lat) {
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  lon = ((lon + 180) % 360 + 360) % 360 - 180;     // [-180,180)
-  lat = Math.max(-89.999999, Math.min(89.999999, lat));
-  return [lon, lat];
+  const clampedLat = clampLat(lat);
+  const wrappedLon = wrapLon(lon);
+  if (clampedLat === null || wrappedLon === null) return null;
+  return [wrappedLon, clampedLat];
 }
 
 function toRad(deg){ return deg*Math.PI/180; }
@@ -619,12 +659,15 @@ function buildGreatCircle(fromId, toId, steps = 180) {
   ));
 
   if (!Number.isFinite(Δ) || Δ === 0) {
-    const p1 = normalizeCoord(lon1d, lat1);
-    const p2 = normalizeCoord(lon2d, lat2);
-    return [p1, p2].filter(Boolean);
+    const latA = clampLat(lat1);
+    const latB = clampLat(lat2);
+    const a = Number.isFinite(lon1d) && latA !== null ? [lon1d, latA] : null;
+    const b = Number.isFinite(lon2d) && latB !== null ? [lon2d, latB] : null;
+    return [a, b].filter(Boolean);
   }
 
   const coords = [];
+  const anchor = lon1d;
   for (let i=0;i<=steps;i++){
     const f = i/steps;
     const A = Math.sin((1-f)*Δ)/Math.sin(Δ);
@@ -637,16 +680,20 @@ function buildGreatCircle(fromId, toId, steps = 180) {
     const φ = Math.atan2(z, Math.sqrt(x*x + y*y));
     const λ = Math.atan2(y, x);
 
-    const lon = toDeg(λ);
-    const lat = toDeg(φ);
-    const norm = normalizeCoord(lon, lat);
-    if (norm) coords.push(norm);
+    const lonRaw = toDeg(λ);
+    const lat = clampLat(toDeg(φ));
+    const anchoredLon = anchorLon(lonRaw, anchor);
+    const norm = normalizeCoord(anchoredLon, lat);
+
+    if (norm) {
+      coords.push(norm);
+    }
   }
 
   if (coords.length < 2) {
-    const p1 = normalizeCoord(lon1d, lat1);
-    const p2 = normalizeCoord(lon2d, lat2);
-    return [p1, p2].filter(Boolean);
+    const a = normalizeCoord(lon1d, lat1);
+    const b = normalizeCoord(anchorLon(lon2d, lon1d), lat2);
+    return [a, b].filter(Boolean);
   }
 
   return coords;
@@ -823,19 +870,30 @@ function buildMarkers() {
 
     if (w.role === "minor") MINOR_MARKERS.push(marker);
 
+    let clickTimer = null;
+
     el.addEventListener("click", ev => {
       ev.stopPropagation();
-      openPopupFor(w.id);
-      map.easeTo({
-        center: w.coords,
-        zoom: getZoom(w.id),
-        duration: 1000
-      });
-      currentID = w.id;
+      if (clickTimer) clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => {
+        focusOnWaypoint(w.id, false);
+        clickTimer = null;
+      }, 220);
+    });
+
+    el.addEventListener("dblclick", ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (clickTimer) clearTimeout(clickTimer);
+      focusOnWaypoint(w.id, true);
     });
   });
 
-  map.on("click", () => closeAllPopups());
+  map.on("click", () => {
+    const restore = orbiting;
+    stopOrbiting(restore);
+    closeAllPopups();
+  });
 
   function updateMinorMarkers() {
     const show = map.getZoom() >= 5;
@@ -922,6 +980,54 @@ function openPopupFor(id) {
   if (p) p.addTo(map);
 }
 
+function focusOnWaypoint(id, deepFocus) {
+  const wp = getWP(id);
+  if (!wp) return;
+
+  spinning = false;
+  userInterrupted = true;
+  stopOrbiting(false);
+  openPopupFor(id);
+
+  const zoom = getFocusZoom(id, deepFocus);
+  const pitch = deepFocus ? 48 : 0;
+  const duration = deepFocus ? 1200 : 1000;
+
+  map.easeTo({
+    center: wp.coords,
+    zoom,
+    pitch,
+    duration,
+    bearing: deepFocus ? map.getBearing() : 0
+  });
+
+  currentID = id;
+
+  if (deepFocus) {
+    orbitTarget = wp.coords;
+    orbiting = true;
+
+    const rotate = () => {
+      if (!orbiting || !orbitTarget) return;
+      const nextBearing = map.getBearing() + 0.6;
+      map.easeTo({
+        center: orbitTarget,
+        bearing: nextBearing,
+        duration: 1400,
+        pitch: map.getPitch(),
+        zoom: map.getZoom(),
+        easing: t => 1 - Math.pow(1 - t, 3)
+      });
+
+      map.once("moveend", () => {
+        orbitFrame = requestAnimationFrame(rotate);
+      });
+    };
+
+    orbitFrame = requestAnimationFrame(rotate);
+  }
+}
+
 /* Remove ARIA glitch: remove aria-hidden from popup close buttons */
 document.addEventListener("DOMNodeInserted", e => {
   if (e.target.classList?.contains("mapboxgl-popup-close-button")) {
@@ -933,9 +1039,14 @@ document.addEventListener("DOMNodeInserted", e => {
 /* ========================== JOURNEY LOGIC =============================== */
 /* ======================================================================= */
 
-function getZoom(id) {
+function getBaseZoom(id) {
   if (["sydney", "la", "toronto"].includes(id)) return 6.7;
   return 9.4;
+}
+
+function getFocusZoom(id, deep = false) {
+  const boost = deep ? 2.2 : 0.7;
+  return Math.min(getBaseZoom(id) + boost, 16);
 }
 
 function getLegMode(id) {
@@ -1027,7 +1138,7 @@ document.addEventListener("click", ev => {
 
   if (!journeyMode) {
     openPopupFor(tgt);
-    map.easeTo({ center: getWP(tgt).coords, zoom: getZoom(tgt), duration: 800 });
+    map.easeTo({ center: getWP(tgt).coords, zoom: getFocusZoom(tgt, false), duration: 800 });
     currentID = tgt;
     return;
   }
@@ -1146,7 +1257,7 @@ function undoTo(id) {
 
   map.easeTo({
     center: getWP(id).coords,
-    zoom: getZoom(id),
+    zoom: getFocusZoom(id, false),
     duration: 800
   });
 
@@ -1161,6 +1272,7 @@ function undoTo(id) {
 function resetJourney() {
   if (!MAP_READY) return;
 
+  stopOrbiting(false);
   journeyMode = false;
   spinning = true;
   userInterrupted = false;
@@ -1227,6 +1339,7 @@ document.getElementById("journeyToggle").addEventListener("click", () => {
 function startJourney() {
   if (!MAP_READY) return;
 
+  stopOrbiting(false);
   journeyMode = true;
   spinning = false;
   userInterrupted = true;
@@ -1251,7 +1364,7 @@ function startJourney() {
 
   map.easeTo({
     center: getWP(currentID).coords,
-    zoom: getZoom(currentID),
+    zoom: getFocusZoom(currentID, false),
     duration: 1200
   });
 
