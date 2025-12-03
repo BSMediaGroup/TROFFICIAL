@@ -962,7 +962,7 @@ const ORBIT_ENTRY_DURATION = 900;    // ms easing into orbit
 // Journey-specific defaults (for journey mode focus)
 const JOURNEY_PITCH_TARGET = 55;                 // shallower oblique for journey mode
 const JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;  // normal journey focus zoom
-const JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5; // 50% of normal for LA only
+const JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5; // 50% of normal for LA/Toronto focus
 
 let orbitTargetId   = null;
 let orbitAnimFrame  = null;
@@ -1025,7 +1025,7 @@ function focusWaypointOrbit(id) {
 }
 
 /* Journey-mode default focus → pitch 55
-   - LA gets its own special zoom (50% of normal)
+   - LA and Toronto get the reduced zoom (JOURNEY_ZOOM_LA)
    - all other waypoints use JOURNEY_ZOOM_DEFAULT
 */
 function focusJourneyOrbit(id) {
@@ -1034,7 +1034,8 @@ function focusJourneyOrbit(id) {
 
   stopOrbit();
 
-  const journeyZoom = (id === "la") ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+  const isLaOrToronto = (id === "la" || id === "toronto");
+  const journeyZoom   = isLaOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
 
   map.easeTo({
     center: wp.coords,
@@ -1054,6 +1055,7 @@ function focusJourneyOrbit(id) {
 ["mousedown","wheel","touchstart","dragstart"].forEach(ev => {
   map.on(ev, () => stopOrbit());
 });
+
 
 
 
@@ -1410,7 +1412,7 @@ function animateLeg(a, b) {
     geometry: { type: "LineString", coordinates: comp.drive }
   });
 
-  // Styling for the current leg being animated
+  // Styling for current leg being animated
   const partialColor = isF ? "#478ED3" : "#FF9C57";
   map.setPaintProperty("journey-current", "line-color", partialColor);
   map.setPaintProperty("journey-current", "line-width", isF ? 3 : 4);
@@ -1418,15 +1420,113 @@ function animateLeg(a, b) {
 
   const duration = isF ? 4200 : 1800;
 
-  // Camera zoom behaviour while travelling:
-  //  - Flights: zoom out wide
-  //  - Road legs: only zoom out slightly from focused zoom level
-  const FLIGHT_TRAVEL_ZOOM = 3.0;                        // wide, see whole arc
-  const ROAD_TRAVEL_ZOOM   = ORBIT_ZOOM_TARGET - 2.5;    // slight zoom-out (~10)
+  // Standard camera travel zoom levels
+  const FLIGHT_TRAVEL_ZOOM = 3.0;                      // wide, see whole arc
+  const ROAD_TRAVEL_ZOOM   = ORBIT_ZOOM_TARGET - 2.5;  // slight zoom-out (~10)
 
-  const travelZoom = isF ? FLIGHT_TRAVEL_ZOOM : ROAD_TRAVEL_ZOOM;
+  let travelZoom;
 
-  // Travel animation: neutral pitch while moving between waypoints
+  // SPECIAL-CASE SYDNEY → LA WITH 2-STAGE TRANSITION (same as start-journey fix)
+  const isSydneyToLA = (a === "sydney" && b === "la");
+
+  if (isSydneyToLA) {
+
+    const START_PAN_DURATION   = 1800;
+    const START_FOCUS_DURATION = 2200;
+
+    const laZoom = (b === "la") ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+
+    // STAGE 1 → zoom OUT from Sydney at flat pitch
+    map.easeTo({
+      center: getWP(a).coords,
+      zoom: 3.5,                   // wide zoom to avoid clipping
+      pitch: 0,
+      bearing: map.getBearing(),
+      duration: START_PAN_DURATION,
+      easing: t => t * t * (3 - 2 * t)
+    });
+
+    // STAGE 2 → pan toward LA at wide zoom, still flat pitch
+    setTimeout(() => {
+      map.easeTo({
+        center: getWP(b).coords,
+        zoom: 3.5,
+        pitch: 0,
+        bearing: map.getBearing(),
+        duration: START_PAN_DURATION,
+        easing: t => t * t * (3 - 2 * t)
+      });
+    }, START_PAN_DURATION);
+
+    // STAGE 3 → ease IN to LA journey focus (pitch 55, special LA zoom)
+    setTimeout(() => {
+      map.easeTo({
+        center: getWP(b).coords,
+        zoom: laZoom,
+        pitch: JOURNEY_PITCH_TARGET,
+        bearing: map.getBearing(),
+        duration: START_FOCUS_DURATION,
+        easing: t => t * t * (3 - 2 * t)
+      });
+    }, START_PAN_DURATION * 2);
+
+    // After all stages: start orbit
+    setTimeout(() => {
+      currentID = b;
+      openPopupFor(b);
+      startOrbit(b);
+      updateHUD();
+    }, START_PAN_DURATION * 2 + START_FOCUS_DURATION);
+
+    // Animate polyline normally (no change)
+    const start = performance.now();
+    const total = seg.length;
+
+    function frame(t) {
+      const prog = Math.min((t - start) / duration, 1);
+      const count = Math.max(2, Math.floor(prog * total));
+      const partial = seg.slice(0, count);
+
+      srcC.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: partial }
+      });
+
+      if (prog < 1) requestAnimationFrame(frame);
+      else {
+        const after = buildCompleteUntil(b);
+        srcF.setData({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: after.flight }
+        });
+        srcD.setData({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: after.drive }
+        });
+        srcC.setData({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [] }
+        });
+      }
+    }
+
+    requestAnimationFrame(frame);
+    return; // IMPORTANT — do NOT process standard logic for this leg
+  }
+
+  // ---------------- NORMAL BEHAVIOUR FOR ALL OTHER LEGS ----------------
+
+  // FLIGHT or ROAD zoom-out levels
+  if (isF) {
+    const isLaToToronto = (a === "la" && b === "toronto");
+    travelZoom = isLaToToronto
+      ? (FLIGHT_TRAVEL_ZOOM + JOURNEY_ZOOM_LA) / 2
+      : FLIGHT_TRAVEL_ZOOM;
+  } else {
+    travelZoom = ROAD_TRAVEL_ZOOM;
+  }
+
+  // Standard travel animation (non-Sydney legs)
   map.easeTo({
     center: getWP(b).coords,
     zoom: travelZoom,
@@ -1436,12 +1536,13 @@ function animateLeg(a, b) {
     essential: false
   });
 
-  const start = performance.now();
-  const total = seg.length;
+  // Standard polyline animation
+  const startStandard = performance.now();
+  const totalStandard = seg.length;
 
-  function frame(t) {
-    const prog = Math.min((t - start) / duration, 1);
-    const count = Math.max(2, Math.floor(prog * total));
+  function frameStandard(t) {
+    const prog = Math.min((t - startStandard) / duration, 1);
+    const count = Math.max(2, Math.floor(prog * totalStandard));
     const partial = seg.slice(0, count);
 
     srcC.setData({
@@ -1450,9 +1551,8 @@ function animateLeg(a, b) {
     });
 
     if (prog < 1) {
-      requestAnimationFrame(frame);
+      requestAnimationFrame(frameStandard);
     } else {
-      // Once leg animation completes, finalize the cumulative paths
       const after = buildCompleteUntil(b);
       srcF.setData({
         type: "Feature",
@@ -1467,7 +1567,7 @@ function animateLeg(a, b) {
         geometry: { type: "LineString", coordinates: [] }
       });
 
-      // Focus on new waypoint in JOURNEY orbit mode (pitch 55°)
+      // Standard arrival in journey mode
       openPopupFor(b);
       currentID = b;
       focusJourneyOrbit(b);
@@ -1475,8 +1575,9 @@ function animateLeg(a, b) {
     }
   }
 
-  requestAnimationFrame(frame);
+  requestAnimationFrame(frameStandard);
 }
+
 
 
 /* ======================================================================= */
@@ -1513,6 +1614,7 @@ function undoTo(id) {
   focusJourneyOrbit(id);
   updateHUD();
 }
+
 
 
 
@@ -1596,35 +1698,91 @@ function startJourney() {
   journeyMode = true;
   spinning = false;
   userInterrupted = true;
-  stopOrbit();
 
-  document.getElementById("journeyToggle").textContent = "Reset Journey";
-  document.getElementById("resetStaticMap").style.display = "none";
+  const journeyToggleBtn = document.getElementById("journeyToggle");
+  const resetStaticMapBtn = document.getElementById("resetStaticMap");
 
+  if (journeyToggleBtn) journeyToggleBtn.textContent = "Reset Journey";
+  if (resetStaticMapBtn) resetStaticMapBtn.style.display = "none";
+
+  // start at the first trip waypoint (Sydney)
   currentID = TRIP_ORDER[0];
 
+  // hide static routes while in journey mode
   if (map.getLayer("flight-route"))
-    map.setLayoutProperty("flight-route","visibility","none");
+    map.setLayoutProperty("flight-route", "visibility", "none");
   if (map.getLayer("drive-route"))
-    map.setLayoutProperty("drive-route","visibility","none");
+    map.setLayoutProperty("drive-route", "visibility", "none");
 
+  // show journey layers and clear any previous data
   ["journey-flight","journey-drive","journey-current"].forEach(id => {
     if (map.getLayer(id))
-      map.setLayoutProperty(id,"visibility","visible");
+      map.setLayoutProperty(id, "visibility", "visible");
     const src = map.getSource(id);
     if (src)
-      src.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
+      src.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: [] }
+      });
   });
 
-  map.easeTo({
-    center: getWP(currentID).coords,
-    zoom: getZoom(currentID),
-    duration: 1200
-  });
-
+  // open Sydney popup
   openPopupFor(currentID);
+
+  const wp = getWP(currentID);
+  if (!wp) {
+    updateHUD();
+    return;
+  }
+
+  // ---------------- TWO-STAGE START MOVEMENT INTO SYDNEY ----------------
+  // 1) smooth pan from default view → near Sydney at wide zoom / flat pitch
+  // 2) then smooth ease-in to journey focus (pitch 55, journey zoom) and start orbit
+
+  const START_PAN_DURATION   = 1800; // ms - first wide pan
+  const START_FOCUS_DURATION = 2200; // ms - then ease into focused journey orbit
+
+  const isLaOrToronto = (currentID === "la" || currentID === "toronto");
+  const journeyZoom   = isLaOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+
+  // kill any previous orbit timers / loops
+  stopOrbit();
+
+  // Stage 1: pan toward Sydney, wide zoom, flat pitch, smooth easing
+  map.easeTo({
+    center: wp.coords,
+    zoom: 3.5,                     // wide view to avoid clipping
+    pitch: 0,
+    bearing: map.getBearing(),
+    duration: START_PAN_DURATION,
+    easing: t => t * t * (3 - 2 * t) // cubic ease-in-out
+  });
+
+  // Stage 2: after pan finishes, zoom + pitch into journey focus (55°)
+  setTimeout(() => {
+    map.easeTo({
+      center: wp.coords,
+      zoom: journeyZoom,
+      pitch: JOURNEY_PITCH_TARGET,        // 55° journey pitch
+      bearing: map.getBearing(),
+      duration: START_FOCUS_DURATION,
+      easing: t => t * t * (3 - 2 * t)    // same smooth easing
+    });
+  }, START_PAN_DURATION);
+
+  // Schedule orbit to start only after both stages complete
+  if (orbitEnterTimer !== null) {
+    clearTimeout(orbitEnterTimer);
+    orbitEnterTimer = null;
+  }
+  orbitEnterTimer = setTimeout(() => {
+    orbitEnterTimer = null;
+    startOrbit(currentID);
+  }, START_PAN_DURATION + START_FOCUS_DURATION);
+
   updateHUD();
 }
+
 
 
 /* ======================================================================= */
