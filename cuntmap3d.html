@@ -601,11 +601,17 @@ function initDistances(){
 /* =================== GREAT-CIRCLE WITHOUT TURF ========================= */
 /* ======================================================================= */
 
-function normalizeCoord(lon, lat) {
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  lon = ((lon + 180) % 360 + 360) % 360 - 180;     // [-180,180)
-  lat = Math.max(-89.999999, Math.min(89.999999, lat));
-  return [lon, lat];
+function clampLat(lat) {
+  if (!Number.isFinite(lat)) return null;
+  return Math.max(-89.999999, Math.min(89.999999, lat));
+}
+
+function anchorLon(lon, anchor) {
+  if (!Number.isFinite(lon)) return null;
+  let adjusted = lon;
+  while (adjusted - anchor > 180) adjusted -= 360;
+  while (adjusted - anchor < -180) adjusted += 360;
+  return adjusted;
 }
 
 function unwrapLon(lon, prevLon) {
@@ -650,9 +656,11 @@ function buildGreatCircle(fromId, toId, steps = 180) {
   ));
 
   if (!Number.isFinite(Δ) || Δ === 0) {
-    const p1 = normalizeCoord(lon1d, lat1);
-    const p2 = normalizeCoord(lon2d, lat2);
-    return [p1, p2].filter(Boolean);
+    const latA = clampLat(lat1);
+    const latB = clampLat(lat2);
+    const a = Number.isFinite(lon1d) && latA !== null ? [lon1d, latA] : null;
+    const b = Number.isFinite(lon2d) && latB !== null ? [lon2d, latB] : null;
+    return [a, b].filter(Boolean);
   }
 
   const coords = [];
