@@ -665,6 +665,19 @@ function unwrapPath(coords){
     let [lng,lat]=coords[i];
     const prev=out[i-1][0];
 
+    coords.push([lon, lat]);
+  }
+  return unwrapPath(coords);
+}
+
+function unwrapPath(coords){
+  if(!Array.isArray(coords) || coords.length<2) return coords||[];
+
+  const out=[coords[0].slice()];
+  for(let i=1;i<coords.length;i++){
+    let [lng,lat]=coords[i];
+    const prev=out[i-1][0];
+
     while(lng-prev>180) lng-=360;
     while(lng-prev<-180) lng+=360;
 
@@ -683,15 +696,18 @@ function unwrapToReference(coord, refLon){
 }
 
 function buildFlightSegment(fromId, toId){
-  const start = getWP(fromId).coords;
-  const end   = getWP(toId).coords.slice();
+  const refLon = map ? map.getCenter().lng : DEFAULT_CENTER[0];
+
+  const start = unwrapToReference(getWP(fromId).coords, refLon);
+  const end   = unwrapToReference(getWP(toId).coords.slice(), refLon);
 
   const diff = end[0] - start[0];
   if (Math.abs(diff) > 180) {
     end[0] += diff > 0 ? -360 : 360; // unwrap across the Pacific instead of the dateline zigzag
   }
 
-  return greatCircleArc(start, end);
+  const arc = greatCircleArc(start, end);
+  return arc.map(pt => unwrapToReference(pt, refLon));
 }
 
 /* ======================================================================= */
@@ -1165,6 +1181,19 @@ function buildCompleteUntil(id) {
   }
 
   return out;
+}
+
+function lerp(a,b,t){
+  return a+(b-a)*t;
+}
+
+function interpolateLngLat(a,b,t){
+  let [lng1,lat1]=a;
+  let [lng2,lat2]=b;
+  let diff=lng2-lng1;
+  if(diff>180) lng2-=360;
+  if(diff<-180) lng2+=360;
+  return [lerp(lng1,lng2,t), lerp(lat1,lat2,t)];
 }
 
 function lerp(a,b,t){
