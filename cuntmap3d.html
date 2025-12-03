@@ -624,6 +624,13 @@ function normalizeCoord(lon, lat) {
   const wrappedLon = wrapLon(lon);
   if (clampedLat === null || wrappedLon === null) return null;
   return [wrappedLon, clampedLat];
+function unwrapLon(lon, prevLon) {
+  if (prevLon === null || !Number.isFinite(prevLon)) return lon;
+  let unwrapped = lon;
+  const diff = lon - prevLon;
+  if (diff > 180) unwrapped = lon - 360;
+  else if (diff < -180) unwrapped = lon + 360;
+  return unwrapped;
 }
 
 function toRad(deg){ return deg*Math.PI/180; }
@@ -668,6 +675,7 @@ function buildGreatCircle(fromId, toId, steps = 180) {
 
   const coords = [];
   const anchor = lon1d;
+  let prevLon = null;
   for (let i=0;i<=steps;i++){
     const f = i/steps;
     const A = Math.sin((1-f)*Δ)/Math.sin(Δ);
@@ -687,6 +695,13 @@ function buildGreatCircle(fromId, toId, steps = 180) {
 
     if (norm) {
       coords.push(norm);
+    const lon = toDeg(λ);
+    const lat = toDeg(φ);
+    const norm = normalizeCoord(lon, lat);
+    if (norm) {
+      const adjustedLon = unwrapLon(norm[0], prevLon);
+      prevLon = adjustedLon;
+      coords.push([adjustedLon, norm[1]]);
     }
   }
 
@@ -694,6 +709,13 @@ function buildGreatCircle(fromId, toId, steps = 180) {
     const a = normalizeCoord(lon1d, lat1);
     const b = normalizeCoord(anchorLon(lon2d, lon1d), lat2);
     return [a, b].filter(Boolean);
+    const p1 = normalizeCoord(lon1d, lat1);
+    const p2 = normalizeCoord(lon2d, lat2);
+    const single = [p1, p2].filter(Boolean);
+    if (!single.length) return [];
+    const first = single[0];
+    const second = single[1] ? unwrapLon(single[1][0], first[0]) : null;
+    return second ? [[first[0], first[1]], [second, single[1][1]]] : [[first[0], first[1]]];
   }
 
   return coords;
@@ -1022,6 +1044,14 @@ function focusOnWaypoint(id, deepFocus) {
       map.once("moveend", () => {
         orbitFrame = requestAnimationFrame(rotate);
       });
+      const nextBearing = map.getBearing() + 0.3;
+      map.easeTo({
+        center: orbitTarget,
+        bearing: nextBearing,
+        duration: 900,
+        easing: t => 1 - Math.pow(1 - t, 3)
+      });
+      orbitFrame = requestAnimationFrame(rotate);
     };
 
     orbitFrame = requestAnimationFrame(rotate);
