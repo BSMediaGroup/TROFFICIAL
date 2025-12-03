@@ -383,11 +383,8 @@
 
 mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
-const DEFAULT_CENTER = [245, 20];  // start with Australia in view
+const DEFAULT_CENTER = [245, 20];  // start with Australia in view (your choice)
 const DEFAULT_ZOOM   = 2.8;
-const DEFAULT_BEARING = 0;
-const DEFAULT_PITCH   = 0;
-const DEFAULT_VIEW = { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, bearing: DEFAULT_BEARING, pitch: DEFAULT_PITCH };
 
 /* Spin state & journey state */
 let spinning = true;
@@ -395,21 +392,11 @@ let userInterrupted = false;
 let journeyMode = false;
 let currentID = null;
 let MAP_READY = false;
-let spinFrame = null;
 
 /* Which markers stay at all zoom levels */
 const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
 
-function resetCamera(animate=true){
-  const opts={...DEFAULT_VIEW};
-
-  if(animate){
-    map.easeTo({...opts,duration:1500});
-  } else {
-    map.jumpTo(opts);
-  }
-}
-
+/* Mode icons */
 const MODE_ICONS = {
   Plane: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
   Car:   "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/car1.svg"
@@ -496,7 +483,9 @@ const DRIVE_ORDER = TRIP_ORDER.slice(2);
 const map = new mapboxgl.Map({
   container: "map",
   style: "mapbox://styles/mapbox/dark-v11",
-  ...DEFAULT_VIEW,
+  center: DEFAULT_CENTER,
+  zoom: DEFAULT_ZOOM,
+  pitch: 0,
   renderWorldCopies: false,
   projection: "globe"
 });
@@ -508,24 +497,20 @@ map.addControl(new mapboxgl.NavigationControl({showCompass:false}));
 /* ======================================================================= */
 
 function spinGlobe() {
-  if (spinFrame) cancelAnimationFrame(spinFrame);
   if (!spinning || journeyMode) return;
 
-  const step = () => {
-    if (!spinning || journeyMode) { spinFrame=null; return; }
+  // Earth rotates west → east = longitude decreases
+  const c = map.getCenter();
+  const newLon = c.lng - 0.02;
 
-    const bearing = (map.getBearing() - 0.05) % 360; // west → east drift
-    map.easeTo({
-      ...DEFAULT_VIEW,
-      bearing,
-      duration: 0,
-      easing: t => t
-    });
+  // Smooth subtle pitch sway
+  const t = Date.now() * 0.00005;
+  const pitch = 10 + Math.sin(t) * 3;
 
-    spinFrame = requestAnimationFrame(step);
-  };
+  map.setCenter([newLon, c.lat]);
+  map.setPitch(pitch);
 
-  step();
+  requestAnimationFrame(spinGlobe);
 }
 
 /* Stop spin on user interaction */
@@ -652,62 +637,52 @@ function buildGreatCircle(fromId, toId, steps = 180) {
     const φ = Math.atan2(z, Math.sqrt(x*x + y*y));
     const λ = Math.atan2(y, x);
 
-    coords.push([lon, lat]);
-  }
-  return unwrapPath(coords);
-}
-
-function unwrapPath(coords){
-  if(!Array.isArray(coords) || coords.length<2) return coords||[];
-
-  const out=[coords[0].slice()];
-  for(let i=1;i<coords.length;i++){
-    let [lng,lat]=coords[i];
-    const prev=out[i-1][0];
-
-    coords.push([lon, lat]);
-  }
-  return unwrapPath(coords);
-}
-
-function unwrapPath(coords){
-  if(!Array.isArray(coords) || coords.length<2) return coords||[];
-
-  const out=[coords[0].slice()];
-  for(let i=1;i<coords.length;i++){
-    let [lng,lat]=coords[i];
-    const prev=out[i-1][0];
-
-    while(lng-prev>180) lng-=360;
-    while(lng-prev<-180) lng+=360;
-
-    out.push([lng,lat]);
+    const lon = toDeg(λ);
+    const lat = toDeg(φ);
+    const norm = normalizeCoord(lon, lat);
+    if (norm) coords.push(norm);
   }
 
-  return out;
-}
-
-function unwrapToReference(coord, refLon){
-  if(!coord || !Array.isArray(coord)) return coord;
-  let [lng,lat]=coord;
-  while(lng-refLon>180) lng-=360;
-  while(lng-refLon<-180) lng+=360;
-  return [lng,lat];
-}
-
-function buildFlightSegment(fromId, toId){
-  const refLon = map ? map.getCenter().lng : DEFAULT_CENTER[0];
-
-  const start = unwrapToReference(getWP(fromId).coords, refLon);
-  const end   = unwrapToReference(getWP(toId).coords.slice(), refLon);
-
-  const diff = end[0] - start[0];
-  if (Math.abs(diff) > 180) {
-    end[0] += diff > 0 ? -360 : 360; // unwrap across the Pacific instead of the dateline zigzag
+  if (coords.length < 2) {
+    const p1 = normalizeCoord(lon1d, lat1);
+    const p2 = normalizeCoord(lon2d, lat2);
+    return [p1, p2].filter(Boolean);
   }
 
-  const arc = greatCircleArc(start, end);
-  return arc.map(pt => unwrapToReference(pt, refLon));
+  return coords;
+}
+
+/* ======================================================================= */
+/* ======================== STATIC ROUTE LAYERS =========================== */
+/* ======================================================================= */
+
+function addStaticRoutes() {
+  const SYD_LA = buildGreatCircle("sydney", "la");
+  const LA_YTZ = buildGreatCircle("la", "toronto").slice(1);
+
+  const allFlight = [...SYD_LA, ...LA_YTZ];
+
+  map.addSource("flight-route", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: allFlight },
+      bbox: [-180, -90, 180, 90],
+      wrap: false
+    }
+  });
+
+  map.addLayer({
+    id: "flight-route",
+    type: "line",
+    source: "flight-route",
+    paint: {
+      "line-color": "#478ED3",
+      "line-width": 3,
+      "line-dasharray": [3, 2],
+      "line-opacity": 0.9
+    }
+  });
 }
 
 /* ======================================================================= */
@@ -768,21 +743,8 @@ async function buildDrivingRoute() {
 /* ======================== BUILD ROAD SEGMENT ============================ */
 /* ======================================================================= */
 
-function addStaticRoutes(){
-  const refLng = map.getCenter().lng;
-  const F1 = buildFlightSegment("sydney","la").map(pt=>unwrapToReference(pt, refLng));
-  const F2 = buildFlightSegment("la","toronto").slice(1).map(pt=>unwrapToReference(pt, refLng));
-  const FLIGHT = [...F1, ...F2];
-
-  map.addSource("flight-route",{
-    type:"geojson",
-    data:{
-      type:"Feature",
-      geometry:{type:"LineString",coordinates:FLIGHT},
-      bbox:[-180,-90,180,90],
-      wrap:false
-    }
-  });
+function roadLeg(a, b) {
+  if (!DRIVING_GEOM.length) return [];
 
   let s = DRIVE_INDEX[a];
   let e = DRIVE_INDEX[b];
@@ -987,90 +949,9 @@ function isFlight(a, b) {
   return (a === "sydney" && b === "la") || (a === "la" && b === "toronto");
 }
 
-/* HUD elements */
-const hud      = document.getElementById("journeyHud");
-const hudPrev  = document.getElementById("hudPrev");
-const hudNext  = document.getElementById("hudNext");
-const hudLabel = document.getElementById("hudLabel");
-
-function startJourney(){
-  if(!MAP_READY) return;
-
-  journeyMode=true;
-  spinning=false;
-  userInterrupted=true;
-
-  document.getElementById("journeyToggle").textContent="Reset Journey";
-  document.getElementById("resetStaticMap").style.display="none";
-
-  currentID = TRIP_ORDER[0];
-
-  if(map.getLayer("flight-route")) map.setLayoutProperty("flight-route","visibility","none");
-  if(map.getLayer("drive-route"))  map.setLayoutProperty("drive-route","visibility","none");
-
-  ["journey-flight","journey-drive","journey-current"].forEach(id=>{
-    if(map.getLayer(id)){
-      map.setLayoutProperty(id,"visibility","visible");
-      const src=map.getSource(id);
-      if(src){
-        src.setData({type:"Feature",geometry:{type:"LineString",coordinates:[]}});
-      }
-    }
-  });
-
-  map.easeTo({
-    center:getWP(currentID).coords,
-    zoom:getZoom(currentID),
-    bearing: DEFAULT_BEARING,
-    pitch: DEFAULT_PITCH,
-    duration:1600
-  });
-
-  openPopupFor(currentID);
-  updateHUD();
-}
-
-function resetJourney(){
-  if(!MAP_READY) return;
-
-  journeyMode=false;
-  spinning=true;
-  userInterrupted=false;
-
-  document.getElementById("journeyToggle").textContent="Start Journey";
-  document.getElementById("resetStaticMap").style.display="none";
-
-  ["journey-flight","journey-drive","journey-current"].forEach(id=>{
-    if(map.getLayer(id)){
-      map.setLayoutProperty(id,"visibility","none");
-      const src=map.getSource(id);
-      if(src){
-        src.setData({type:"Feature",geometry:{type:"LineString",coordinates:[]}});
-      }
-    }
-  });
-
-  if(map.getLayer("flight-route")) map.setLayoutProperty("flight-route","visibility","visible");
-  if(map.getLayer("drive-route"))  map.setLayoutProperty("drive-route","visibility","visible");
-
-  closeAllPopups();
-
-  resetCamera();
-
-  spinGlobe();
-  updateHUD();
-}
-
-/* RESET MAP IN STATIC MODE */
-document.getElementById("resetStaticMap").addEventListener("click",()=>{
-  if(journeyMode) return;
-
-  userInterrupted=false;
-  spinning=true;
-
-  closeAllPopups();
-
-  resetCamera();
+/* ======================================================================= */
+/* ============================= HUD ====================================== */
+/* ======================================================================= */
 
 const hud = document.getElementById("journeyHud");
 const hudPrev = document.getElementById("hudPrev");
@@ -1183,38 +1064,9 @@ function buildCompleteUntil(id) {
   return out;
 }
 
-function lerp(a,b,t){
-  return a+(b-a)*t;
-}
-
-function interpolateLngLat(a,b,t){
-  let [lng1,lat1]=a;
-  let [lng2,lat2]=b;
-  let diff=lng2-lng1;
-  if(diff>180) lng2-=360;
-  if(diff<-180) lng2+=360;
-  return [lerp(lng1,lng2,t), lerp(lat1,lat2,t)];
-}
-
-function lerp(a,b,t){
-  return a+(b-a)*t;
-}
-
-function interpolateLngLat(a,b,t){
-  let [lng1,lat1]=a;
-  let [lng2,lat2]=b;
-  let diff=lng2-lng1;
-  if(diff>180) lng2-=360;
-  if(diff<-180) lng2+=360;
-  return [lerp(lng1,lng2,t), lerp(lat1,lat2,t)];
-}
-
-function animateLeg(a,b){
-  if(a===b) return;
-
-  const isF = isFlight(a,b);
-  const rawSeg = isF ? buildFlightSegment(a,b) : roadLeg(a,b);
-  const seg = rawSeg.map(pt=>unwrapToReference(pt, map.getCenter().lng));
+/* ======================================================================= */
+/* ======================== JOURNEY ANIMATION ============================= */
+/* ======================================================================= */
 
 function animateLeg(a, b) {
   if (a === b) return;
@@ -1237,34 +1089,26 @@ function animateLeg(a, b) {
   map.setPaintProperty("journey-current", "line-width", isF ? 3 : 4);
   map.setPaintProperty("journey-current", "line-dasharray", isF ? [3, 2] : [1, 0]);
 
-  const zoom = isF ? 4.2 : 9.2;
-  const duration = isF ? 4500 : 2600;
+  const zoom = isF ? 4 : 9.4;
+  const duration = isF ? 4200 : 1800;
 
-  const startCenter = seg[0];
-  const endCenter = seg[seg.length-1];
-  const startZoom = map.getZoom();
+  // Single smooth camera movement per leg
+  map.easeTo({
+    center: getWP(b).coords,
+    zoom: zoom,
+    duration: duration + 400,
+    essential: false
+  });
 
   let start = performance.now();
   const total = seg.length;
 
-  function frame(t){
-    const prog=Math.min((t-start)/duration,1);
-    const eased = 1-Math.pow(1-prog,3);
-    const count=Math.max(2,Math.floor(prog*total));
-    const partial = seg.slice(0,count);
+  function frame(t) {
+    const prog = Math.min((t - start) / duration, 1);
+    const count = Math.max(2, Math.floor(prog * total));
+    const partial = seg.slice(0, count);
 
-    srcC.setData({type:"Feature",geometry:{type:"LineString",coordinates:partial}});
-
-    const camCenter = interpolateLngLat(startCenter,endCenter,eased);
-    const camZoom = lerp(startZoom, zoom, eased);
-    map.easeTo({
-      center: camCenter,
-      zoom: camZoom,
-      bearing: DEFAULT_BEARING,
-      pitch: DEFAULT_PITCH,
-      duration:0,
-      easing: t=>t
-    });
+    srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: partial }});
 
     if (prog < 1) {
       requestAnimationFrame(frame);
@@ -1275,16 +1119,7 @@ function animateLeg(a, b) {
       srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
 
       openPopupFor(b);
-      const targetCenter = unwrapToReference(getWP(b).coords, map.getCenter().lng);
-      map.easeTo({
-        center:targetCenter,
-        zoom:getZoom(b),
-        bearing: DEFAULT_BEARING,
-        pitch: DEFAULT_PITCH,
-        duration:900
-      });
-
-      currentID=b;
+      currentID = b;
       updateHUD();
     }
   }
@@ -1310,11 +1145,114 @@ function undoTo(id) {
   openPopupFor(id);
 
   map.easeTo({
-    center:getWP(id).coords,
-    zoom:getZoom(id),
-    bearing: DEFAULT_BEARING,
-    pitch: DEFAULT_PITCH,
-    duration:900
+    center: getWP(id).coords,
+    zoom: getZoom(id),
+    duration: 800
+  });
+
+  currentID = id;
+  updateHUD();
+}
+
+/* ======================================================================= */
+/* ======================== RESET MAP / JOURNEY =========================== */
+/* ======================================================================= */
+
+function resetJourney() {
+  if (!MAP_READY) return;
+
+  journeyMode = false;
+  spinning = true;
+  userInterrupted = false;
+  currentID = null;
+
+  document.getElementById("journeyToggle").textContent = "Start Journey";
+  document.getElementById("resetStaticMap").style.display = "none";
+
+  closeAllPopups();
+
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, "visibility", "none");
+      const src = map.getSource(id);
+      if (src) src.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
+    }
+  });
+
+  if (map.getLayer("flight-route"))
+    map.setLayoutProperty("flight-route","visibility","visible");
+  if (map.getLayer("drive-route"))
+    map.setLayoutProperty("drive-route","visibility","visible");
+
+  map.jumpTo({
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0
+  });
+
+  spinGlobe();
+  updateHUD();
+}
+
+/* Reset Map in static mode */
+document.getElementById("resetStaticMap").addEventListener("click", () => {
+  if (journeyMode) return;
+
+  userInterrupted = false;
+  spinning = true;
+
+  closeAllPopups();
+
+  map.jumpTo({
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0
+  });
+
+  spinGlobe();
+  document.getElementById("resetStaticMap").style.display = "none";
+});
+
+/* ======================================================================= */
+/* ======================== JOURNEY TOGGLE ================================ */
+/* ======================================================================= */
+
+document.getElementById("journeyToggle").addEventListener("click", () => {
+  if (journeyMode) resetJourney();
+  else startJourney();
+});
+
+function startJourney() {
+  if (!MAP_READY) return;
+
+  journeyMode = true;
+  spinning = false;
+  userInterrupted = true;
+
+  document.getElementById("journeyToggle").textContent = "Reset Journey";
+  document.getElementById("resetStaticMap").style.display = "none";
+
+  currentID = TRIP_ORDER[0];
+
+  if (map.getLayer("flight-route"))
+    map.setLayoutProperty("flight-route","visibility","none");
+  if (map.getLayer("drive-route"))
+    map.setLayoutProperty("drive-route","visibility","none");
+
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    if (map.getLayer(id))
+      map.setLayoutProperty(id,"visibility","visible");
+    const src = map.getSource(id);
+    if (src)
+      src.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
+  });
+
+  map.easeTo({
+    center: getWP(currentID).coords,
+    zoom: getZoom(currentID),
+    duration: 1200
   });
 
   openPopupFor(currentID);
@@ -1342,20 +1280,12 @@ map.on("load", async () => {
   spinGlobe();
 });
 
-/* Journey Toggle */
-document.getElementById("journeyToggle").addEventListener("click",()=>{
-  if(journeyMode) resetJourney();
-  else startJourney();
-});
-
-/* Add journey-only route sources */
-function addJourneySources(){
-  ["journey-flight","journey-drive","journey-current"].forEach(id=>{
-    map.addSource(id,{
-      type:"geojson",
-      data:{type:"Feature",geometry:{type:"LineString",coordinates:[]}},
-      lineMetrics:true,
-      wrap:false
+/* Add empty journey polyline sources */
+function addJourneySources() {
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    map.addSource(id, {
+      type: "geojson",
+      data: { type:"Feature", geometry:{ type:"LineString", coordinates: [] }}
     });
 
     map.addLayer({
