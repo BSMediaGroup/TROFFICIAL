@@ -606,6 +606,11 @@ function clampLat(lat) {
   return Math.max(-89.999999, Math.min(89.999999, lat));
 }
 
+function wrapLon(lon) {
+  if (!Number.isFinite(lon)) return null;
+  return ((lon + 180) % 360 + 360) % 360 - 180;
+}
+
 function anchorLon(lon, anchor) {
   if (!Number.isFinite(lon)) return null;
   let adjusted = lon;
@@ -614,6 +619,11 @@ function anchorLon(lon, anchor) {
   return adjusted;
 }
 
+function normalizeCoord(lon, lat) {
+  const clampedLat = clampLat(lat);
+  const wrappedLon = wrapLon(lon);
+  if (clampedLat === null || wrappedLon === null) return null;
+  return [wrappedLon, clampedLat];
 function unwrapLon(lon, prevLon) {
   if (prevLon === null || !Number.isFinite(prevLon)) return lon;
   let unwrapped = lon;
@@ -664,6 +674,7 @@ function buildGreatCircle(fromId, toId, steps = 180) {
   }
 
   const coords = [];
+  const anchor = lon1d;
   let prevLon = null;
   for (let i=0;i<=steps;i++){
     const f = i/steps;
@@ -677,6 +688,13 @@ function buildGreatCircle(fromId, toId, steps = 180) {
     const φ = Math.atan2(z, Math.sqrt(x*x + y*y));
     const λ = Math.atan2(y, x);
 
+    const lonRaw = toDeg(λ);
+    const lat = clampLat(toDeg(φ));
+    const anchoredLon = anchorLon(lonRaw, anchor);
+    const norm = normalizeCoord(anchoredLon, lat);
+
+    if (norm) {
+      coords.push(norm);
     const lon = toDeg(λ);
     const lat = toDeg(φ);
     const norm = normalizeCoord(lon, lat);
@@ -688,6 +706,9 @@ function buildGreatCircle(fromId, toId, steps = 180) {
   }
 
   if (coords.length < 2) {
+    const a = normalizeCoord(lon1d, lat1);
+    const b = normalizeCoord(anchorLon(lon2d, lon1d), lat2);
+    return [a, b].filter(Boolean);
     const p1 = normalizeCoord(lon1d, lat1);
     const p2 = normalizeCoord(lon2d, lat2);
     const single = [p1, p2].filter(Boolean);
@@ -1010,6 +1031,19 @@ function focusOnWaypoint(id, deepFocus) {
 
     const rotate = () => {
       if (!orbiting || !orbitTarget) return;
+      const nextBearing = map.getBearing() + 0.6;
+      map.easeTo({
+        center: orbitTarget,
+        bearing: nextBearing,
+        duration: 1400,
+        pitch: map.getPitch(),
+        zoom: map.getZoom(),
+        easing: t => 1 - Math.pow(1 - t, 3)
+      });
+
+      map.once("moveend", () => {
+        orbitFrame = requestAnimationFrame(rotate);
+      });
       const nextBearing = map.getBearing() + 0.3;
       map.easeTo({
         center: orbitTarget,
