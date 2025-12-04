@@ -1,0 +1,3391 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>North America Trip – Donation Route</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Mapbox -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+
+  <!-- Turf is no longer needed for great-circle, but leaving it is harmless -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <style>
+    /* ===================== FONTS ===================== */
+    @font-face {
+      font-family: "RechargeBd";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Recharge%20Bd.otf")
+           format("opentype");
+      font-weight: 700;
+    }
+
+    @font-face {
+      font-family: "SuiGenerisRg";
+      src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Sui%20Generis%20Rg.otf")
+           format("opentype");
+      font-weight: 400;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05060A;
+      font-family: "SuiGenerisRg", system-ui;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* ===================== OVERLAY ===================== */
+    .trip-overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 9999;
+      padding: 14px 18px;
+      width: 320px;
+      background: rgba(5,6,10,0.92);
+      border: 1px solid #606060;
+      border-radius: 10px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.8);
+      color: #A3A3A3;
+    }
+
+    .trip-overlay-title {
+      font-family: "RechargeBd";
+      font-size: 18px;
+      letter-spacing: 0.06em;
+      color: #F0F0F0;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .trip-overlay-subtitle {
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .trip-legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
+    .legend-line {
+      width: 22px;
+    }
+
+    .trip-legend-row img {
+      width: 16px;
+      height: 16px;
+    }
+
+    #legendTotalDistance {
+      margin-top: 10px;
+      padding-top: 6px;
+      border-top: 1px solid #505050;
+      color: #F0F0F0;
+      font-size: 11px;
+    }
+
+    /* ===================== BUTTONS ===================== */
+    .trip-journey-btn {
+      margin-top: 12px;
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #FFA50D;
+      background: rgba(5,6,10,0.95);
+      color: #FFA50D;
+      font-family: "RechargeBd";
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .trip-journey-btn:hover {
+      background: #FFA50D;
+      color: #05060A;
+    }
+
+    /* RESET MAP (static mode only) */
+    #resetStaticMap {
+      display: none;
+      margin-top: 10px;
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 6px;
+      border: 1px solid #A0A0A0;
+      background: rgba(5,6,10,0.85);
+      color: #E0E0E0;
+      font-family: "RechargeBd";
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    #resetStaticMap:hover {
+      background: #E0E0E0;
+      color: #05060A;
+    }
+
+    /* ===================== POPUPS ===================== */
+    .mapboxgl-popup {
+      font-family: "SuiGenerisRg", system-ui;
+    }
+
+    .mapboxgl-popup-content {
+      background: rgba(0,0,0,0.87);
+      border: 1px solid #666;
+      border-radius: 12px;
+      padding: 14px 16px;
+      min-width: 360px;
+      max-width: 560px; /* ~50% wider tooltip */
+    }
+
+    .mapboxgl-popup-close-button {
+      font-size: 24px;
+      color: #F0F0F0 !important;
+    }
+
+    .trip-popup-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: "RechargeBd";
+      font-size: 16px;
+      color: #F0F0F0;
+    }
+
+    .trip-popup-title-icon {
+      width: 26px;
+      height: 26px;
+    }
+
+    .trip-popup-location {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;        /* location line text size 11 */
+      color: #A3A3A3;          /* updated colour */
+      margin-top: 4px;
+    }
+
+    .trip-popup-flag {
+      width: 18px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid #FFF;
+      background-size: cover;
+      background-position: center;
+    }
+
+    /* Popup country flags */
+    .trip-flag-au { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/au.svg"); }
+    .trip-flag-ca { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg"); }
+    .trip-flag-us { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg"); }
+
+    .trip-popup-body {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #F0F0F0;
+      line-height: 1.45;
+    }
+
+    .trip-popup-travelled {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #A3A3A3;  /* travelled line colour */
+    }
+
+    .trip-popup-divider {
+      margin-top: 8px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #505050;
+    }
+
+    .trip-popup-nav {
+      margin-top: 4px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .trip-popup-nav-link {
+      color: #FFA50D;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .trip-popup-nav-link:hover {
+      text-decoration: underline;
+    }
+
+    .trip-popup-mode-icon {
+      width: 14px;
+      height: 14px;
+      filter: invert(62%) sepia(68%) saturate(585%) hue-rotate(359deg) brightness(101%) contrast(105%);
+    }
+
+    /* ===================== MARKERS ===================== */
+    .trip-marker {
+      cursor: pointer;
+      z-index: 30 !important;
+    }
+
+    .trip-marker img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      transform-origin: 50% 100%;
+    }
+
+    .trip-marker.departure,
+    .trip-marker.toronto,
+    .trip-marker.destination { width: 42px; height: 42px; }
+
+    .trip-marker.major { width: 28px; height: 28px; }
+    .trip-marker.minor { width: 20px; height: 20px; }
+
+    @keyframes pinBounce {
+      0%   { transform: scale(0.5); }
+      60%  { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+
+    .trip-marker.bounce img { animation: pinBounce 0.55s ease-out forwards; }
+
+    /* ===================== HUD ===================== */
+    .journey-hud {
+      position: absolute;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: none;
+      text-align: center;
+    }
+
+    .journey-hud-buttons {
+      display: inline-flex;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .journey-hud-btn {
+      min-width: 140px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #FFA50D;
+      background: rgba(5,6,10,0.95);
+      color: #FFA50D;
+      font-family: "RechargeBd";
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .journey-hud-btn:hover:not(:disabled) {
+      background: #FFA50D;
+      color: #05060A;
+    }
+
+    .journey-hud-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    .journey-hud-label {
+      font-size: 11px;
+      color: #F0F0F0;
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .hud-mode-icon {
+      width: 15px;
+      height: 15px;
+      filter: invert(100%);
+    }
+
+    .hud-flag {
+      width: 18px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid #FFF;
+      background-size: cover;
+      background-position: center;
+    }
+
+    .hud-flag-au { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/au.svg"); }
+    .hud-flag-ca { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg"); }
+    .hud-flag-us { background-image: url("https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg"); }
+	
+
+	/* ======================================================================= */
+	/* ============================ DETAILS SIDEBAR =========================== */
+	/* ======================================================================= */
+
+	/* Dimmed overlay behind the panel */
+	.details-overlay {
+	  position: fixed;
+	  inset: 0;
+	  background: rgba(0, 0, 0, 0.55);
+	  z-index: 999998;
+	  opacity: 0;
+	  pointer-events: none;
+	  transition: opacity 0.25s ease-out;
+	}
+	.details-overlay.open {
+	  opacity: 1;
+	  pointer-events: auto;
+	}
+
+	.details-sidebar {
+	  position: fixed;
+	  top: 0;
+	  right: -480px;  /* hidden off-screen */
+	  width: 480px;
+	  height: 100%;
+	  background: rgba(0, 0, 0, 0.85);
+	  border-left: 1px solid #666;
+	  z-index: 999999; /* above popups and HUD */
+	  transition: right 0.40s cubic-bezier(0.22, 0.61, 0.36, 1);
+	  box-shadow: -4px 0 18px rgba(0,0,0,0.65);
+	  backdrop-filter: blur(6px);
+	  color: #EEE;
+	  font-family: "SuiGenerisRg", system-ui; /* body/data text */
+	}
+
+	.details-sidebar.open {
+	  right: 0;
+	}
+
+	.details-sidebar-content {
+	  display: flex;
+	  flex-direction: column;
+	  height: 100%;
+	  overflow-y: auto;
+	}
+
+	.details-sidebar-header {
+	  position: relative;
+	  width: 100%;
+	}
+
+	.details-sidebar-image {
+	  width: 100%;
+	  aspect-ratio: 2 / 1;
+	  object-fit: cover;
+	  border-bottom: 1px solid #555;
+	  background: #111;
+	}
+
+	.details-sidebar-close {
+	  position: absolute;
+	  top: 12px;
+	  right: 12px;
+	  width: 34px;
+	  height: 34px;
+	  border-radius: 50%;
+	  border: 1px solid rgba(255,255,255,0.3);
+	  background: rgba(0,0,0,0.75);
+	  color: #FFF;
+	  font-size: 24px;
+	  cursor: pointer;
+	  line-height: 30px;
+	  display: flex;
+	  align-items: center;
+	  justify-content: center;
+	}
+	.details-sidebar-close:hover {
+	  background: rgba(255,255,255,0.18);
+	}
+
+	.details-sidebar-body {
+	  padding: 18px 20px 30px 20px;
+	  color: #EEE;
+	}
+
+	/* Title row with icon prefix */
+	.details-sidebar-title-row {
+	  display: flex;
+	  align-items: center;
+	  gap: 8px;
+	  flex-wrap: nowrap;
+	}
+	.details-sidebar-title-icon {
+	  width: 26px;
+	  height: 26px;
+	}
+
+	.details-sidebar-title {
+	  margin: 0;
+	  padding: 0;
+	  font-family: "RechargeBd"; /* title uses Recharge */
+	  font-size: 18px;           /* reduced from 22px */
+	  letter-spacing: 0.04em;
+	  color: #FFF;
+	  text-transform: none;
+	}
+
+	.details-sidebar-location {
+	  margin-top: 6px;
+	  font-size: 13px;
+	  color: #A3A3A3;
+	}
+
+	/* Flag suffix next to location line */
+	.details-location-header-line {
+	  display: inline-flex;
+	  align-items: center;
+	  gap: 6px;
+	}
+	.details-location-flag-inline {
+	  width: 18px;
+	  height: 12px;
+	  border-radius: 2px;
+	  border: 1px solid #FFF;
+	  background-size: cover;
+	  background-position: center;
+	}
+
+	.details-sidebar-description {
+	  margin-top: 10px;
+	  font-size: 13px;
+	  line-height: 1.45;
+	  color: #E0E0E0;
+	}
+
+	.details-sidebar-divider {
+	  margin: 18px 0 20px 0;
+	  border-bottom: 1px solid #555;
+	}
+
+	/* Generic section styling */
+	.details-section {
+	  margin-bottom: 18px;
+	}
+	.details-section-title {
+	  font-family: "RechargeBd";   /* section titles use Recharge */
+	  font-size: 11px;
+	  letter-spacing: 0.12em;
+	  text-transform: uppercase;
+	  color: #BEBEBE;
+	  margin-bottom: 6px;
+	}
+
+	/* Location Info grid */
+	.details-location-grid {
+	  display: grid;
+	  grid-template-columns: 1fr;
+	  gap: 4px;
+	  font-size: 13px;
+	}
+	.details-location-row {
+	  display: flex;
+	  justify-content: space-between;
+	  align-items: center;
+	  gap: 10px;
+	  padding: 4px 0;
+	  border-bottom: 1px dotted rgba(255,255,255,0.06);
+	}
+	.details-location-row:last-child {
+	  border-bottom: none;
+	}
+	.details-kv-label {
+	  font-size: 11px;
+	  text-transform: uppercase;
+	  letter-spacing: 0.10em;
+	  color: #808080;
+	  white-space: nowrap;
+	  font-family: "RechargeBd"; /* small field labels pop a bit */
+	}
+	.details-kv-value {
+	  font-size: 13px;
+	  color: #F4F4F4;
+	  text-align: right;
+	  flex: 1;
+	  font-family: "SuiGenerisRg"; /* data text */
+	}
+
+	.details-pill {
+	  padding: 2px 8px;
+	  border-radius: 999px;
+	  border: 1px solid rgba(255,255,255,0.25);
+	  font-size: 11px;
+	  color: #EAEAEA;
+	  background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
+	  backdrop-filter: blur(4px);
+	  white-space: nowrap;
+	  font-family: "SuiGenerisRg";
+	}
+
+	/* Weather block */
+	.details-weather-body {
+	  min-height: 40px;
+	  font-size: 13px;
+	}
+	.details-weather-main {
+	  display: flex;
+	  align-items: center;
+	  gap: 10px;
+	  margin-bottom: 4px;
+	}
+	.details-weather-icon {
+	  width: 26px;
+	  height: 26px;
+	  border-radius: 50%;
+	  display: flex;
+	  align-items: center;
+	  justify-content: center;
+	  font-size: 16px;
+	  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6), rgba(0,0,0,0.4));
+	}
+	.details-weather-temp {
+	  font-size: 18px;
+	  font-family: "RechargeBd";
+	  letter-spacing: 0.04em;
+	}
+	.details-weather-meta {
+	  font-size: 12px;
+	  color: #D0D0D0;
+	}
+	.details-weather-label {
+	  margin-bottom: 2px;
+	}
+	.details-weather-wind {
+	  font-size: 11px;
+	  color: #AFAFAF;
+	}
+	.details-weather-status {
+	  font-size: 12px;
+	  color: #AFAFAF;
+	}
+	.details-weather-error {
+	  font-size: 12px;
+	  color: #FF9494;
+	}
+
+	/* Distance block */
+	.details-distance-body {
+	  font-size: 13px;
+	  color: #EAEAEA;
+	  font-family: "SuiGenerisRg";
+	}
+	.details-distance-body strong {
+	  font-family: "RechargeBd";
+	}
+
+	/* Sidebar HUD (journey controls inside panel) */
+	.details-sidebar-hud {
+	  margin-bottom: 16px;
+	  display: none; /* shown when journeyMode is true */
+	}
+	.details-sidebar-hud-buttons {
+	  display: flex;
+	  gap: 10px;
+	  margin-bottom: 6px;
+	}
+	.details-sidebar-hud-btn {
+	  flex: 1;
+	  padding: 6px 10px;
+	  border-radius: 6px;
+	  border: 1px solid #FFA50D;
+	  background: rgba(5,6,10,0.95);
+	  color: #FFA50D;
+	  font-family: "RechargeBd";
+	  font-size: 10px;
+	  letter-spacing: 0.08em;
+	  text-transform: uppercase;
+	  cursor: pointer;
+	}
+	.details-sidebar-hud-btn:hover:not(:disabled) {
+	  background: #FFA50D;
+	  color: #05060A;
+	}
+	.details-sidebar-hud-btn:disabled {
+	  opacity: 0.35;
+	  cursor: default;
+	}
+	.details-sidebar-hud-label {
+	  font-size: 11px;
+	  color: #F0F0F0;
+	  display: flex;
+	  gap: 6px;
+	  align-items: center;
+	  justify-content: flex-start;
+	}
+	.details-sidebar-hud-mode-icon {
+	  width: 15px;
+	  height: 15px;
+	  filter: invert(100%);
+	}
+	.details-sidebar-hud-flag {
+	  width: 18px;
+	  height: 12px;
+	  border-radius: 2px;
+	  border: 1px solid #FFF;
+	  background-size: cover;
+	  background-position: center;
+	}
+
+	/* Explore links (existing) */
+	.details-sidebar-links {
+	  display: flex;
+	  flex-direction: column;
+	  gap: 10px;
+	  margin-top: 10px;
+	}
+
+	.details-sidebar-link {
+	  color: #FFA50D;
+	  text-decoration: none;
+	  font-size: 14px;
+	  font-family: "RechargeBd"; /* CTA-style */
+	  letter-spacing: 0.06em;
+	  text-transform: uppercase;
+	}
+	.details-sidebar-link:hover {
+	  text-decoration: underline;
+	}
+
+	/* Future section placeholder */
+	.details-sidebar-future {
+	  margin-top: 20px;
+	  padding: 10px 12px;
+	  border-radius: 8px;
+	  border: 1px dashed rgba(255,255,255,0.15);
+	  background: rgba(255,255,255,0.02);
+	  font-size: 11px;
+	  color: #858585;
+	  font-style: italic;
+	}
+
+
+
+
+
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="trip-overlay">
+
+  <!-- COLLAPSIBLE LEGEND TOGGLE BUTTON -->
+  <button id="legendToggle" class="trip-journey-btn" style="margin-bottom:10px;">
+    LEGEND ▼
+  </button>
+
+  <!-- LEGEND CONTAINER (ALL EXISTING CONTENT MOVED INSIDE) -->
+  <div id="legendContainer">
+
+    <div class="trip-overlay-title">North America Trip Route</div>
+
+    <div class="trip-overlay-subtitle">
+      Sydney → L.A. → Toronto flights, then road trip via Buffalo, NYC & Hoboken to Toms River.
+    </div>
+
+    <div class="trip-legend-row">
+      <span class="legend-line" style="border-top:2px dashed #478ED3"></span> Flights
+    </div>
+
+    <div class="trip-legend-row">
+      <span class="legend-line" style="border-top:2px solid #FF9C57"></span> Driving Route
+    </div>
+
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg"> Departure
+    </div>
+
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg"> Final Destination
+    </div>
+
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg"> Arrival / Toronto
+    </div>
+
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg"> Major Waypoints
+    </div>
+
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"> Minor Waypoints
+    </div>
+
+    <div id="legendTotalDistance">Total Distance: calculating…</div>
+  </div>
+  <!-- END LEGEND CONTAINER -->
+
+  <button id="journeyToggle" class="trip-journey-btn">Start Journey</button>
+  <button id="resetStaticMap">Reset Map</button>
+
+</div>
+
+
+<div id="journeyHud" class="journey-hud">
+  <div class="journey-hud-buttons">
+    <button id="hudPrev" class="journey-hud-btn">GO BACK</button>
+    <button id="hudNext" class="journey-hud-btn">Next Stop</button>
+  </div>
+  <div id="hudLabel" class="journey-hud-label"></div>
+</div>
+
+
+
+<!-- ========================= DETAILS SIDEBAR ========================= -->
+
+<!-- Dim background overlay for the slide-over panel -->
+<div id="detailsOverlay" class="details-overlay"></div>
+
+<div id="detailsSidebar" class="details-sidebar">
+  <div class="details-sidebar-content">
+
+    <div class="details-sidebar-header">
+      <img id="detailsSidebarImage" class="details-sidebar-image" src="" alt="">
+      <button id="detailsSidebarClose" class="details-sidebar-close">×</button>
+    </div>
+
+    <div class="details-sidebar-body">
+
+      <!-- Title row with icon prefix -->
+      <div class="details-sidebar-title-row">
+        <img id="detailsSidebarIcon" class="details-sidebar-title-icon" src="" alt="">
+        <h2 id="detailsSidebarTitle" class="details-sidebar-title"></h2>
+      </div>
+
+      <!-- Location line with flag suffix -->
+      <div id="detailsSidebarLocation" class="details-sidebar-location"></div>
+
+      <!-- Description line -->
+      <div id="detailsSidebarDescription" class="details-sidebar-description"></div>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- *************************************** -->
+      <!-- START JOURNEY BUTTON (shown when NOT in journey mode) -->
+      <!-- *************************************** -->
+      <button id="detailsSidebarStartJourney"
+              class="details-sidebar-hud-btn"
+              style="display:none; margin-bottom:16px; width:100%;">
+        Start Journey
+      </button>
+
+      <!-- Sidebar HUD: journey navigation while panel is open -->
+      <div id="detailsSidebarHud" class="details-sidebar-hud">
+        <div class="details-sidebar-hud-buttons">
+          <button id="detailsHudPrev" class="details-sidebar-hud-btn">GO BACK</button>
+          <button id="detailsHudNext" class="details-sidebar-hud-btn">Next Stop</button>
+        </div>
+        <div id="detailsHudLabel" class="details-sidebar-hud-label"></div>
+      </div>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- A) LOCATION INFORMATION -->
+      <section id="detailsLocationInfo" class="details-section">
+        <div class="details-section-title">Location Info</div>
+        <div id="detailsLocationInfoBody" class="details-location-grid">
+          <!-- populated dynamically -->
+        </div>
+      </section>
+
+      <!-- B) LIVE WEATHER -->
+      <section id="detailsWeather" class="details-section">
+        <div class="details-section-title">Live Weather</div>
+        <div id="detailsWeatherContent" class="details-weather-body">
+          <!-- populated dynamically -->
+        </div>
+      </section>
+
+      <!-- C) DISTANCE FROM PREVIOUS WAYPOINT -->
+      <section id="detailsDistance" class="details-section">
+        <div class="details-section-title">Route Distance</div>
+        <div id="detailsDistanceContent" class="details-distance-body"></div>
+      </section>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- Existing explore links (preserved) -->
+      <div class="details-sidebar-links">
+        <a id="detailsSidebarTourist"  class="details-sidebar-link" target="_blank">Tourist Places</a>
+        <a id="detailsSidebarToilets"  class="details-sidebar-link" target="_blank">Toilets</a>
+        <a id="detailsSidebarHotels"   class="details-sidebar-link" target="_blank">Hotels</a>
+      </div>
+
+      <!-- D) FUTURE SECTION PLACEHOLDER -->
+      <div id="detailsSidebarFuture" class="details-sidebar-future">
+        Future content for this waypoint will appear here.
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+
+
+
+<script>
+mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
+
+const DEFAULT_CENTER = [245, 20];  // start with Australia in view
+const DEFAULT_ZOOM   = 2.8;
+
+let spinning = true;
+let userInterrupted = false;
+let journeyMode = false;
+let currentID = null;
+let MAP_READY = false;
+
+/* New orbit globals */
+let orbitingId = null;
+let orbitAnim = null;
+
+const ALWAYS_VISIBLE = new Set(["sydney","toronto","tomsriver"]);
+
+const MODE_ICONS = {
+  Plane: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
+  Car:   "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/car1.svg"
+};
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+
+/* ======================================================================= */
+/* ========================= LEGEND COLLAPSE LOGIC ======================== */
+/* ======================================================================= */
+
+const _legendToggle    = document.getElementById("legendToggle");
+const _legendContainer = document.getElementById("legendContainer");
+
+let _legendCollapsed = false;
+
+function updateLegendUI() {
+  if (_legendCollapsed) {
+    _legendContainer.classList.add("collapsed");
+    _legendToggle.textContent = "LEGEND ▲";
+  } else {
+    _legendContainer.classList.remove("collapsed");
+    _legendToggle.textContent = "LEGEND ▼";
+  }
+}
+
+_legendToggle.addEventListener("click", () => {
+  _legendCollapsed = !_legendCollapsed;
+  updateLegendUI();
+});
+
+updateLegendUI();
+
+
+
+/* ======================================================================= */
+/* ========================== WAYPOINTS (STRUCTURED) ===================== */
+/* ======================================================================= */
+
+const WAYPOINTS = [
+  {
+    id: "sydney",
+    role: "departure",
+    mode: "Plane",
+    coords: [151.177222, -33.946111],
+
+    // LOCATION LINE (old dataset, restored)
+    location: "Sydney Kingsford Smith Airport (SYD)",
+
+    names: {
+      display: "Departure – Sydney",
+      basic: "Sydney, NSW",
+      city: "Sydney",
+      state: "NSW",
+      country: "Australia"
+    },
+
+    description: "Starting point of the North America trip, departing from Sydney.",
+
+    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
+    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/sydney1.webp",
+
+    links: {
+      search:  "https://www.google.com/maps/search/tourist+places/Sydney+NSW",
+      toilets: "https://www.google.com/maps/search/toilet/Sydney+NS",
+      hotels:  "https://www.google.com/maps/search/hotels/Sydney+NS"
+    },
+
+    meta: {
+      flag: "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/au.svg",
+      timezone: "Australia/Sydney",
+      locale: "en-AU",
+      countryCode: "AU"
+    }
+  },
+
+  {
+    id:"la",
+    role:"major",
+    mode:"Plane",
+    coords:[-118.403616889565,33.94247880317191],
+
+    location:"Los Angeles International Airport (LAX)",
+
+    names: {
+      display:"Major Waypoint – Los Angeles",
+      basic:"Los Angeles, CA",
+      city:"Los Angeles",
+      state:"CA",
+      country:"United States"
+    },
+
+    description:"Stopover at LAX before continuing to Toronto.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/losangeles1.webp",
+
+    links: {
+      search:  "https://www.google.com/maps/search/tourist+places/Los+Angeles+CA",
+      toilets: "https://www.google.com/maps/search/toilet/Los+Angeles+CA",
+      hotels:  "https://www.google.com/maps/search/hotels/Los+Angeles+CA"
+    },
+
+    meta: {
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/Los_Angeles",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"toronto",
+    role:"toronto",
+    mode:"Car",
+    coords:[-79.62726381614229,43.680452176904645],
+
+    location:"Toronto Pearson International Airport (YYZ)",
+
+    names: {
+      display:"Arrival – Toronto",
+      basic:"Toronto, ON",
+      city:"Toronto",
+      state:"ON",
+      country:"Canada"
+    },
+
+    description:"Meeting Shawn and starting road trip.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/toronto.webp",
+
+    links: {
+      search:  "https://www.google.com/maps/search/tourist+places/Toronto+ON",
+      toilets: "https://www.google.com/maps/search/toilet/Toronto+ON",
+      hotels:  "https://www.google.com/maps/search/hotels/Toronto+ON"
+    },
+
+    meta: {
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg",
+      timezone:"America/Toronto",
+      locale:"en-CA",
+      countryCode:"CA"
+    }
+  },
+
+  /* ===================================================================== */
+  /* ========================= DRIVING WAYPOINTS ========================= */
+  /* ===================================================================== */
+
+  {
+    id:"hamilton",
+    role:"minor",
+    mode:"Car",
+    coords:[-79.8711,43.2557],
+
+    location:"Hamilton, Ontario",
+
+    names:{
+      display:"Waypoint – Hamilton",
+      basic:"Hamilton, ON",
+      city:"Hamilton",
+      state:"ON",
+      country:"Canada"
+    },
+
+    description:"Passing Hamilton on the way to Niagara.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/hamilton.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Hamilton+ON",
+      toilets:"https://www.google.com/maps/search/toilet/Hamilton+ON",
+      hotels:"https://www.google.com/maps/search/hotels/Hamilton+ON"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg",
+      timezone:"America/Toronto",
+      locale:"en-CA",
+      countryCode:"CA"
+    }
+  },
+
+  {
+    id:"niagarafalls",
+    role:"minor",
+    mode:"Car",
+    coords:[-79.0849,43.0896],
+
+    location:"Niagara Falls, Ontario",
+
+    names:{
+      display:"Waypoint – Niagara Falls",
+      basic:"Niagara Falls, ON",
+      city:"Niagara Falls",
+      state:"ON",
+      country:"Canada"
+    },
+
+    description:"Crossing the border after Niagara.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/niagara.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Niagara+Falls+ON",
+      toilets:"https://www.google.com/maps/search/toilet/Niagara+Falls+ON",
+      hotels:"https://www.google.com/maps/search/hotels/Niagara+Falls+ON"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg",
+      timezone:"America/Toronto",
+      locale:"en-CA",
+      countryCode:"CA"
+    }
+  },
+
+  {
+    id:"buffalo",
+    role:"major",
+    mode:"Car",
+    coords:[-78.73351075487278,42.93973725814752],
+
+    location:"Buffalo Niagara Intl Airport",
+
+    names:{
+      display:"Major Waypoint – Buffalo",
+      basic:"Buffalo, NY",
+      city:"Buffalo",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Picking up Gina flying in from Boston.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/buffalo.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Buffalo+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Buffalo+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Buffalo+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"batavia",
+    role:"minor",
+    mode:"Car",
+    coords:[-78.193,42.9987],
+
+    location:"Batavia NY",
+
+    names:{
+      display:"Waypoint – Batavia",
+      basic:"Batavia, NY",
+      city:"Batavia",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Small stop on I-90.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/batavia.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Batavia+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Batavia+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Batavia+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"rochester",
+    role:"minor",
+    mode:"Car",
+    coords:[-77.6088,43.1566],
+
+    location:"Rochester NY",
+
+    names:{
+      display:"Waypoint – Rochester",
+      basic:"Rochester, NY",
+      city:"Rochester",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Passing Rochester heading east.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/rochester.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Rochester+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Rochester+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Rochester+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"geneva",
+    role:"minor",
+    mode:"Car",
+    coords:[-76.9856,42.8684],
+
+    location:"Geneva NY",
+
+    names:{
+      display:"Waypoint – Geneva",
+      basic:"Geneva, NY",
+      city:"Geneva",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Finger Lakes waypoint.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/geneva.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Geneva+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Geneva+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Geneva+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"syracuse",
+    role:"minor",
+    mode:"Car",
+    coords:[-76.1474,43.0481],
+
+    location:"Syracuse NY",
+
+    names:{
+      display:"Waypoint – Syracuse",
+      basic:"Syracuse, NY",
+      city:"Syracuse",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Another major eastbound point.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/syracuse.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Syracuse+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Syracuse+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Syracuse+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"utica",
+    role:"minor",
+    mode:"Car",
+    coords:[-75.2327,43.1009],
+
+    location:"Utica NY",
+
+    names:{
+      display:"Waypoint – Utica",
+      basic:"Utica, NY",
+      city:"Utica",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Passing Utica on I-90.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/ultica.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Utica+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Utica+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Utica+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"albany",
+    role:"minor",
+    mode:"Car",
+    coords:[-73.7562,42.6526],
+
+    location:"Albany NY",
+
+    names:{
+      display:"Waypoint – Albany",
+      basic:"Albany, NY",
+      city:"Albany",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"New York’s state capital.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/albany.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Albany+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Albany+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Albany+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"kingston",
+    role:"minor",
+    mode:"Car",
+    coords:[-73.9974,41.927],
+
+    location:"Kingston NY",
+
+    names:{
+      display:"Waypoint – Kingston",
+      basic:"Kingston, NY",
+      city:"Kingston",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Hudson Valley waypoint.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/kingston.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Kingston+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Kingston+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Kingston+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"newburgh",
+    role:"minor",
+    mode:"Car",
+    coords:[-74.0104,41.5034],
+
+    location:"Newburgh NY",
+
+    names:{
+      display:"Waypoint – Newburgh",
+      basic:"Newburgh, NY",
+      city:"Newburgh",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Near Hudson bridge crossings.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/newburgh.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Newburgh+NY",
+      toilets:"https://www.google.com/maps/search/toilet/Newburgh+NY",
+      hotels:"https://www.google.com/maps/search/hotels/Newburgh+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"whiteplains",
+    role:"minor",
+    mode:"Car",
+    coords:[-73.7629,41.033],
+    
+    location:"White Plains NY",
+
+    names:{
+      display:"Waypoint – White Plains",
+      basic:"White Plains, NY",
+      city:"White Plains",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"Before entering NYC region.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/whiteplains.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/White+Plains+NY",
+      toilets:"https://www.google.com/maps/search/toilet/White+Plains+NY",
+      hotels:"https://www.google.com/maps/search/hotels/White+Plains+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"nyc",
+    role:"major",
+    mode:"Car",
+    coords:[-73.98518854058835,40.758137170862625],
+
+    location:"Times Square",
+
+    names:{
+      display:"Major Waypoint – New York City",
+      basic:"New York, NY",
+      city:"New York",
+      state:"NY",
+      country:"United States"
+    },
+
+    description:"NYC before heading south.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/newyork2.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/New+York+NY",
+      toilets:"https://www.google.com/maps/search/toilet/New+York+NY",
+      hotels:"https://www.google.com/maps/search/hotels/New+York+NY"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"hoboken",
+    role:"minor",
+    mode:"Car",
+    coords:[-74.0324,40.7433],
+
+    location:"Hoboken NJ",
+
+    names:{
+      display:"Waypoint – Hoboken",
+      basic:"Hoboken, NJ",
+      city:"Hoboken",
+      state:"NJ",
+      country:"United States"
+    },
+
+    description:"Passing through Hoboken waterfront.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/hoboken.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Hoboken+NJ",
+      toilets:"https://www.google.com/maps/search/toilet/Hoboken+NJ",
+      hotels:"https://www.google.com/maps/search/hotels/Hoboken+NJ"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"newark",
+    role:"major",
+    mode:"Car",
+    coords:[-74.1706,40.7336],
+
+    location:"Prudential Center",
+
+    names:{
+      display:"Major Waypoint – Newark",
+      basic:"Newark, NJ",
+      city:"Newark",
+      state:"NJ",
+      country:"United States"
+    },
+
+    description:"Meet-up with Amanda & Davey from Missouri.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/newark.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Newark+NJ",
+      toilets:"https://www.google.com/maps/search/toilet/Newark+NJ",
+      hotels:"https://www.google.com/maps/search/hotels/Newark+NJ"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  },
+
+  {
+    id:"tomsriver",
+    role:"destination",
+    mode:"Car",
+    coords:[-74.18603,39.962545],
+
+    location:"179 NJ-37 East, Toms River NJ",
+
+    names:{
+      display:"Final Destination – Toms River",
+      basic:"Toms River, NJ",
+      city:"Toms River",
+      state:"NJ",
+      country:"United States"
+    },
+
+    description:"Final stop of the road trip campaign.",
+
+    icon:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg",
+    image:"https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/tomsriver.webp",
+
+    links:{
+      search:"https://www.google.com/maps/search/tourist+places/Toms+River+NJ",
+      toilets:"https://www.google.com/maps/search/toilet/Toms+River+NJ",
+      hotels:"https://www.google.com/maps/search/hotels/Toms+River+NJ"
+    },
+
+    meta:{
+      flag:"https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
+      timezone:"America/New_York",
+      locale:"en-US",
+      countryCode:"US"
+    }
+  }
+];
+
+/* Trip order = same as waypoint order */
+const TRIP_ORDER  = WAYPOINTS.map(w => w.id);
+
+/* Driving route only from Toronto onward */
+const DRIVE_ORDER = TRIP_ORDER.slice(2);
+
+
+
+/* ======================================================================= */
+/* =========================== MAP INIT ================================== */
+/* ======================================================================= */
+
+const map = new mapboxgl.Map({
+  container: "map",
+  style: "mapbox://styles/mapbox/dark-v11",
+  center: DEFAULT_CENTER,
+  zoom: DEFAULT_ZOOM,
+  pitch: 0,
+  renderWorldCopies: false,
+  projection: "globe"
+});
+
+map.addControl(new mapboxgl.NavigationControl({showCompass:false}));
+
+
+/* ======================================================================= */
+/* =================== TRUE EARTH AXIS SPIN (WEST→EAST) ================== */
+/* ======================================================================= */
+
+function spinGlobe() {
+  if (!spinning || journeyMode) return;
+
+  const c = map.getCenter();
+  const newLon = c.lng - 0.02;
+
+  const t = Date.now() * 0.00005;
+  const pitch = 10 + Math.sin(t) * 3;
+
+  map.setCenter([newLon, c.lat]);
+  map.setPitch(pitch);
+
+  requestAnimationFrame(spinGlobe);
+}
+
+/* Stop spin on user interaction */
+["mousedown","touchstart","wheel","keydown"].forEach(ev=>{
+  map.on(ev, e =>{
+    if(!e.originalEvent) return;
+    spinning = false;
+    userInterrupted = true;
+    if(!journeyMode){
+      document.getElementById("resetStaticMap").style.display = "block";
+    }
+    stopOrbit(); /* stop orbit on any user input */
+  });
+});
+
+
+/* ======================================================================= */
+/* ========================== DISTANCE CALC =============================== */
+/* ======================================================================= */
+
+const LEG_DIST      = {};
+const TRAVELLED_KM  = {};
+const TRAVELLED_MI  = {};
+
+function haversine(a,b){
+  const R=6371, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b[1]-a[1]);
+  const dLon=toRad(b[0]-a[0]);
+  const lat1=toRad(a[1]);
+  const lat2=toRad(b[1]);
+  const h=Math.sin(dLat/2)**2 +
+           Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function getWP(id){ return WAYPOINTS.find(w=>w.id===id); }
+
+function initDistances(){
+  let kmSum=0, miSum=0;
+
+  TRIP_ORDER.forEach((id,i)=>{
+    if(i===0){
+      TRAVELLED_KM[id]=0;
+      TRAVELLED_MI[id]=0;
+      return;
+    }
+
+    const prev=getWP(TRIP_ORDER[i-1]);
+    const cur =getWP(id);
+    const km=haversine(prev.coords,cur.coords);
+    const mi=km*0.621371;
+
+    LEG_DIST[prev.id]={ km:+km.toFixed(1), mi:+mi.toFixed(1) };
+
+    kmSum+=km;
+    miSum+=mi;
+
+    TRAVELLED_KM[id]=+kmSum.toFixed(1);
+    TRAVELLED_MI[id]=+miSum.toFixed(1);
+  });
+
+  const last=TRIP_ORDER.at(-1);
+  document.getElementById("legendTotalDistance").textContent =
+    `Total Distance: ${TRAVELLED_MI[last]}mi (${TRAVELLED_KM[last]}km)`;
+}
+
+
+/* ======================================================================= */
+/* =================== GREAT-CIRCLE WITHOUT TURF ========================= */
+/* ======================================================================= */
+
+function normalizeCoord(lon, lat) {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+  lat = Math.max(-89.999999, Math.min(89.999999, lat));
+  return [lon, lat];
+}
+
+function toRad(deg){ return deg*Math.PI/180; }
+function toDeg(rad){ return rad*180/Math.PI; }
+
+/**
+ * FIXED GREAT-CIRCLE — NO ZIGZAG ACROSS AFRICA.
+ * Correctly handles dateline wrap → ensures shortest arc across Pacific.
+ */
+function buildGreatCircle(fromId, toId, steps = 220) {
+  const [lon1d, lat1] = getWP(fromId).coords;
+  const [lon2d, lat2] = getWP(toId).coords;
+
+  let λ1 = toRad(lon1d);
+  let λ2 = toRad(lon2d);
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+
+  let dλ = λ2 - λ1;
+
+  /* Fix wrong long-way-around path (ZIGZAG FIX) */
+  if (Math.abs(dλ) > Math.PI) {
+    if (dλ > 0) λ1 += 2*Math.PI;
+    else        λ2 += 2*Math.PI;
+    dλ = λ2 - λ1;
+  }
+
+  const Δ = 2 * Math.asin(Math.sqrt(
+    Math.sin((φ2-φ1)/2)**2 +
+    Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2
+  ));
+
+  if (!Number.isFinite(Δ) || Δ === 0) {
+    const p1 = normalizeCoord(lon1d, lat1);
+    const p2 = normalizeCoord(lon2d, lat2);
+    return [p1, p2].filter(Boolean);
+  }
+
+  const coords = [];
+  for (let i=0;i<=steps;i++){
+    const f = i/steps;
+    const A = Math.sin((1-f)*Δ)/Math.sin(Δ);
+    const B = Math.sin(f*Δ)/Math.sin(Δ);
+
+    const x = A*Math.cos(φ1)*Math.cos(λ1) + B*Math.cos(φ2)*Math.cos(λ2);
+    const y = A*Math.cos(φ1)*Math.sin(λ1) + B*Math.cos(φ2)*Math.sin(λ2);
+    const z = A*Math.sin(φ1) + B*Math.sin(φ2);
+
+    const φ = Math.atan2(z, Math.sqrt(x*x + y*y));
+    const λ = Math.atan2(y, x);
+
+    const lon = toDeg(λ);
+    const lat = toDeg(φ);
+
+    const norm = normalizeCoord(lon, lat);
+    if (norm) coords.push(norm);
+  }
+
+  return coords;
+}
+
+
+/* ======================================================================= */
+/* ======================== STATIC ROUTE LAYERS =========================== */
+/* ======================================================================= */
+
+function addStaticRoutes() {
+  const SYD_LA = buildGreatCircle("sydney", "la");
+  const LA_YTZ = buildGreatCircle("la", "toronto").slice(1);
+
+  const allFlight = [...SYD_LA, ...LA_YTZ];
+
+  map.addSource("flight-route", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: allFlight },
+      bbox: [-180, -90, 180, 90],
+      wrap: false
+    }
+  });
+
+  map.addLayer({
+    id: "flight-route",
+    type: "line",
+    source: "flight-route",
+    paint: {
+      "line-color": "#478ED3",
+      "line-width": 3,
+      "line-dasharray": [3, 2],
+      "line-opacity": 0.9
+    }
+  });
+}
+
+
+/* ======================================================================= */
+/* ======================= DRIVING ROUTE (FULL BLOCK) ===================== */
+/* ======================================================================= */
+
+let DRIVING_GEOM = [];
+let DRIVE_INDEX  = {};
+
+async function buildDrivingRoute() {
+  const coords = DRIVE_ORDER.map(id => getWP(id).coords);
+  if (coords.length < 2) return;
+
+  const url =
+    "https://api.mapbox.com/directions/v5/mapbox/driving/" +
+    coords.map(c => c.join(",")).join(";") +
+    `?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`;
+
+  const res = await fetch(url);
+  const json = await res.json();
+  if (!json.routes || !json.routes.length) return;
+
+  DRIVING_GEOM = json.routes[0].geometry.coordinates;
+
+  map.addSource("drive-route", {
+    type: "geojson",
+    data: json.routes[0].geometry
+  });
+
+  map.addLayer({
+    id: "drive-route",
+    type: "line",
+    source: "drive-route",
+    paint: {
+      "line-color": "#FF9C57",
+      "line-width": 4,
+      "line-opacity": 0.95
+    }
+  });
+
+  coords.forEach((wp, i) => {
+    let bestIndex = 0;
+    let bestDist = Infinity;
+
+    DRIVING_GEOM.forEach((c, n) => {
+      const d = haversine(wp, c);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIndex = n;
+      }
+    });
+
+    DRIVE_INDEX[DRIVE_ORDER[i]] = bestIndex;
+  });
+}
+
+/* ======================================================================= */
+/* ======================== BUILD ROAD SEGMENT ============================ */
+/* ======================================================================= */
+
+function roadLeg(a, b) {
+  if (!DRIVING_GEOM.length) return [];
+
+  let s = DRIVE_INDEX[a];
+  let e = DRIVE_INDEX[b];
+
+  if (typeof s !== "number" || typeof e !== "number") return [];
+
+  if (s > e) [s, e] = [e, s];
+
+  return DRIVING_GEOM.slice(s, e + 1);
+}
+
+
+/* ======================================================================= */
+/* ======================= NATION SHADING LAYERS ========================== */
+/* ======================================================================= */
+
+async function addNation(id, url, color, opacity) {
+  try {
+    const r = await fetch(url);
+    const g = await r.json();
+
+    map.addSource(id, { type: "geojson", data: g });
+
+    map.addLayer({
+      id: id + "-fill",
+      type: "fill",
+      source: id,
+      paint: {
+        "fill-color": color,
+        "fill-opacity": opacity
+      }
+    });
+
+    map.addLayer({
+      id: id + "-outline",
+      type: "line",
+      source: id,
+      paint: {
+        "line-color": color,
+        "line-width": 1.2
+      }
+    });
+  }
+  catch (e) {
+    console.error("Nation load error:", e);
+  }
+}
+
+
+/* ======================================================================= */
+/* ============================ MARKERS + ORBIT =========================== */
+/* ======================================================================= */
+
+const MARKERS = {};
+const POPUPS  = {};
+const MINOR_MARKERS = [];
+
+/* ======================================================================= */
+/* ====================== ORBIT CAMERA CONSTANTS ========================= */
+/* ======================================================================= */
+
+const ORBIT_ZOOM_TARGET    = 12.5;   // zoom for focused orbit (manual / dblclick)
+const ORBIT_PITCH_TARGET   = 75;     // manual / double-click orbit pitch
+const ORBIT_ROTATION_SPEED = 0.03;   // degrees per frame
+const ORBIT_ENTRY_DURATION = 900;    // ms easing into orbit
+
+// Journey-specific defaults (for journey mode focus)
+const JOURNEY_PITCH_TARGET = 55;                 // shallower oblique for journey mode
+const JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;  // normal journey focus zoom
+const JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5; // 50% of normal for LA/Toronto focus
+
+let orbitTargetId   = null;
+let orbitAnimFrame  = null;
+let orbitEnterTimer = null;
+
+/* Stop any active/pending orbit */
+function stopOrbit() {
+  if (orbitEnterTimer !== null) {
+    clearTimeout(orbitEnterTimer);
+    orbitEnterTimer = null;
+  }
+  if (orbitAnimFrame !== null) {
+    cancelAnimationFrame(orbitAnimFrame);
+    orbitAnimFrame = null;
+  }
+  orbitTargetId = null;
+}
+
+/* Start continuous orbit around current camera center */
+function startOrbit(id) {
+  orbitTargetId = id;
+  orbitAnimFrame = requestAnimationFrame(orbitLoop);
+}
+
+/* Bearing-only orbit (cheap, no tile reloads) */
+function orbitLoop() {
+  if (!orbitTargetId) return;
+
+  const wp = getWP(orbitTargetId);
+  if (!wp) {
+    stopOrbit();
+    return;
+  }
+
+  const newBearing = map.getBearing() + ORBIT_ROTATION_SPEED;
+  map.setBearing(newBearing);
+
+  orbitAnimFrame = requestAnimationFrame(orbitLoop);
+}
+
+/* Manual / double-click focus → pitch 75 (UNCHANGED BEHAVIOUR) */
+function focusWaypointOrbit(id) {
+  const wp = getWP(id);
+  if (!wp) return;
+
+  stopOrbit();
+
+  map.easeTo({
+    center: wp.coords,
+    zoom: ORBIT_ZOOM_TARGET,
+    pitch: ORBIT_PITCH_TARGET,   // 75° for manual orbit
+    bearing: map.getBearing(),
+    duration: ORBIT_ENTRY_DURATION
+  });
+
+  orbitEnterTimer = setTimeout(() => {
+    orbitEnterTimer = null;
+    startOrbit(id);
+  }, ORBIT_ENTRY_DURATION);
+}
+
+/* Journey-mode default focus → pitch 55
+   - LA and Toronto get the reduced zoom (JOURNEY_ZOOM_LA)
+   - all other waypoints use JOURNEY_ZOOM_DEFAULT
+*/
+function focusJourneyOrbit(id) {
+  const wp = getWP(id);
+  if (!wp) return;
+
+  stopOrbit();
+
+  const isLaOrToronto = (id === "la" || id === "toronto");
+  const journeyZoom   = isLaOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+
+  map.easeTo({
+    center: wp.coords,
+    zoom: journeyZoom,
+    pitch: JOURNEY_PITCH_TARGET,   // 55° for journey mode
+    bearing: map.getBearing(),
+    duration: ORBIT_ENTRY_DURATION
+  });
+
+  orbitEnterTimer = setTimeout(() => {
+    orbitEnterTimer = null;
+    startOrbit(id);
+  }, ORBIT_ENTRY_DURATION);
+}
+
+/* Stop orbit on real user interaction */
+["mousedown","wheel","touchstart","dragstart"].forEach(ev => {
+  map.on(ev, () => stopOrbit());
+});
+
+
+
+
+/* ======================================================================= */
+/* =============================== MARKERS ================================ */
+/* ======================================================================= */
+
+function buildMarkers() {
+  WAYPOINTS.forEach(w => {
+
+    // marker DOM
+    const el = document.createElement("div");
+    el.className = "trip-marker " + w.role;
+    el.innerHTML = `<img src="${w.icon}">`;
+
+    setTimeout(() => el.classList.add("bounce"), 80);
+
+    // popup
+    const popup = new mapboxgl.Popup({
+      offset: 28,
+      closeOnClick: true
+    })
+      .setHTML(buildPopupHTML(w))
+      .setLngLat(w.coords);
+
+    POPUPS[w.id] = popup;
+
+    // marker object
+    const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+      .setLngLat(w.coords)
+      .addTo(map);
+
+    MARKERS[w.id] = marker;
+
+    if (w.role === "minor") MINOR_MARKERS.push(marker);
+
+    /* --------------------- SINGLE CLICK (TOP-DOWN FOCUS) --------------------- */
+    el.addEventListener("click", ev => {
+      ev.stopPropagation();
+      stopOrbit();  // leave orbit mode
+
+      openPopupFor(w.id);
+
+      map.easeTo({
+        center: w.coords,
+        zoom: getZoom(w.id) + 1.5,
+        pitch: 0,
+        bearing: 0,
+        duration: 900
+      });
+
+      currentID = w.id;
+    });
+
+    /* ---------------- DOUBLE CLICK (ANGLED ORBIT FOCUS MODE) ----------------- */
+    el.addEventListener("dblclick", ev => {
+      ev.stopPropagation();
+      openPopupFor(w.id);
+      currentID = w.id;
+
+      focusWaypointOrbit(w.id);
+    });
+
+  });
+
+  // click on map background
+  map.on("click", () => {
+    closeAllPopups();
+    stopOrbit();
+  });
+
+  // minor marker visibility vs zoom
+  function updateMinorMarkers() {
+    const show = map.getZoom() >= 5;
+    MINOR_MARKERS.forEach(m => {
+      const e = m.getElement();
+      if (e) e.style.display = show ? "block" : "none";
+    });
+  }
+
+  updateMinorMarkers();
+  map.on("zoom", updateMinorMarkers);
+}
+
+/* ======================================================================= */
+/* ======================= POPUP NAV CLICK HANDLER ======================== */
+/* ======================================================================= */
+
+document.addEventListener("click", function (ev) {
+  const link = ev.target.closest(".trip-popup-nav-link");
+  if (!link) return;
+
+  ev.stopPropagation();  // IMPORTANT: prevents the map click-event from closing popup first
+
+  const reset = link.dataset.reset;
+  const dir   = link.dataset.dir;
+  const tgt   = link.dataset.target;
+
+  // RESET MAP
+  if (reset) {
+    resetJourney();
+    return;
+  }
+
+  if (!dir || !tgt) return;
+
+  // NON-JOURNEY-MODE (simple focus)
+  if (!journeyMode) {
+    stopOrbit();
+    openPopupFor(tgt);
+    currentID = tgt;
+
+    map.easeTo({
+      center: getWP(tgt).coords,
+      zoom: ORBIT_ZOOM_TARGET,
+      pitch: ORBIT_PITCH_TARGET,
+      bearing: map.getBearing(),
+      duration: 900
+    });
+
+    startOrbit(tgt);
+    return;
+  }
+
+  // JOURNEY MODE navigation
+  if (dir === "next") animateLeg(currentID, tgt);
+  else if (dir === "prev") undoTo(tgt);
+});
+
+
+/* ======================================================================= */
+/* ============================ POPUPS ==================================== */
+/* ======================================================================= */
+
+function buildPopupHTML(w) {
+  const idx  = TRIP_ORDER.indexOf(w.id);
+  const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
+  const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
+
+  const tMi     = TRAVELLED_MI[w.id];
+  const tKm     = TRAVELLED_KM[w.id];
+  const totalMi = TRAVELLED_MI[TRIP_ORDER.at(-1)];
+  const totalKm = TRAVELLED_KM[TRIP_ORDER.at(-1)];
+
+  const mode     = getLegMode(w.id);
+  const locLabel = w.location || "";
+  const flagUrl  = w.meta?.flag || "";
+
+  let navHTML = "";
+
+  // GO BACK
+  if (prev) {
+    navHTML += `
+      <span class="trip-popup-nav-link" data-dir="prev" data-target="${prev}">
+        Go Back
+      </span>
+    `;
+  }
+
+  // NEXT STOP with distance + mode icon
+  if (next) {
+    const dist = LEG_DIST[w.id];
+    let label = "";
+    if (dist) {
+      label = ` – ${dist.mi}mi <span style="color:#A3A3A3">(${dist.km}km)</span>`;
+    }
+    navHTML += `
+      <span class="trip-popup-nav-link" data-dir="next" data-target="${next}">
+        <img src="${MODE_ICONS[mode]}" class="trip-popup-mode-icon">
+        Next Stop${label}
+      </span>
+    `;
+  }
+
+  // DETAILS button with expand icon prefix
+  navHTML += `
+    <span class="trip-popup-nav-link details-btn" data-details="${w.id}">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/exp.svg"
+           class="trip-popup-mode-icon">
+      Details
+    </span>
+  `;
+
+  // Optional reset link on final destination
+  if (w.id === "tomsriver") {
+    navHTML += `
+      <span class="trip-popup-nav-link" data-reset="1">
+        Reset Map
+      </span>
+    `;
+  }
+
+  return `
+    <div class="trip-popup">
+      <div class="trip-popup-title">
+        <img src="${w.icon}" class="trip-popup-title-icon">
+        <span>${escapeHTML(w.names?.display || w.id)}</span>
+      </div>
+
+      <div class="trip-popup-location">
+        <span>${escapeHTML(locLabel)}</span>
+        <span class="trip-popup-flag" style="background-image:url('${flagUrl}')"></span>
+      </div>
+
+      <div class="trip-popup-body">
+        ${escapeHTML(w.description || "")}
+      </div>
+
+      <div class="trip-popup-travelled">
+        Travelled: ${tMi} / ${totalMi}mi
+        <span style="color:#A3A3A3">(${tKm} / ${totalKm}km)</span>
+      </div>
+
+      <div class="trip-popup-divider"></div>
+
+      <div class="trip-popup-nav">
+        ${navHTML}
+      </div>
+    </div>
+  `;
+}
+
+function closeAllPopups() {
+  document.querySelectorAll(".mapboxgl-popup").forEach(p => p.remove());
+}
+
+function openPopupFor(id) {
+  closeAllPopups();
+  const p = POPUPS[id];
+  if (p) p.addTo(map);
+}
+
+/* Remove ARIA glitch on close buttons */
+document.addEventListener("DOMNodeInserted", e => {
+  if (e.target.classList?.contains("mapboxgl-popup-close-button")) {
+    e.target.removeAttribute("aria-hidden");
+  }
+});
+
+
+
+
+
+/* ======================================================================= */
+/* =========================== SIDEBAR LOGIC ============================= */
+/* ======================================================================= */
+
+const detailsOverlay          = document.getElementById("detailsOverlay");
+const detailsSidebar          = document.getElementById("detailsSidebar");
+const detailsImage            = document.getElementById("detailsSidebarImage");
+const detailsTitle            = document.getElementById("detailsSidebarTitle");
+const detailsIcon             = document.getElementById("detailsSidebarIcon");
+const detailsLocation         = document.getElementById("detailsSidebarLocation");
+const detailsDescription      = document.getElementById("detailsSidebarDescription");
+
+const detailsTourist          = document.getElementById("detailsSidebarTourist");
+const detailsToilets          = document.getElementById("detailsSidebarToilets");
+const detailsHotels           = document.getElementById("detailsSidebarHotels");
+const detailsClose            = document.getElementById("detailsSidebarClose");
+
+const detailsLocationInfoBody = document.getElementById("detailsLocationInfoBody");
+const detailsWeatherContent   = document.getElementById("detailsWeatherContent");
+const detailsDistanceContent  = document.getElementById("detailsDistanceContent");
+
+const detailsSidebarHud       = document.getElementById("detailsSidebarHud");
+const detailsHudPrev          = document.getElementById("detailsHudPrev");
+const detailsHudNext          = document.getElementById("detailsHudNext");
+const detailsHudLabel         = document.getElementById("detailsHudLabel");
+
+
+/** ====================================================================
+ * Currency mapping
+ * ==================================================================== */
+function getCurrencyInfo(countryCode) {
+  const map = {
+    "AU": { code: "AUD", name: "Australian Dollar",      symbol: "A$"  },
+    "US": { code: "USD", name: "United States Dollar",   symbol: "US$" },
+    "CA": { code: "CAD", name: "Canadian Dollar",        symbol: "CA$" }
+  };
+  return map[countryCode] || { code: "—", name: "Unknown currency", symbol: "?" };
+}
+
+
+/** ====================================================================
+ * Local Time — 12-hour + weekday
+ * ==================================================================== */
+function formatLocalTime(wp) {
+  const tz     = wp.meta?.timezone;
+  const locale = wp.meta?.locale || "en-US";
+
+  if (!tz) return "Time unavailable";
+
+  try {
+    const now = new Date();
+
+    const weekday = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      weekday: "long"
+    }).format(now);
+
+    const time12h = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).format(now);
+
+    return `${weekday}, ${time12h}`;
+  } catch {
+    return "Time unavailable";
+  }
+}
+
+
+/** ====================================================================
+ * Timezone + UTC offset
+ * ==================================================================== */
+function formatTimeZoneWithOffset(wp) {
+  const tz     = wp.meta?.timezone;
+  const locale = wp.meta?.locale || "en-US";
+
+  if (!tz) return "N/A";
+
+  try {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "shortOffset"
+    });
+
+    const parts = fmt.formatToParts(now);
+    let offset = parts.find(p => p.type === "timeZoneName")?.value || "";
+
+    if (offset.startsWith("GMT")) offset = "UTC" + offset.slice(3);
+
+    return `${tz} (${offset})`;
+  } catch {
+    return tz;
+  }
+}
+
+
+/** ====================================================================
+ * Weather code mapping
+ * ==================================================================== */
+function mapWeatherCodeToInfo(code) {
+  const c = Number(code);
+
+  if (isNaN(c)) return { label: "Unknown conditions", icon: "?" };
+
+  if (c === 0) return { label: "Clear sky", icon: "☀️" };
+  if (c === 1 || c === 2) return { label: "Mostly clear", icon: "🌤️" };
+  if (c === 3) return { label: "Overcast", icon: "☁️" };
+  if (c === 45 || c === 48) return { label: "Fog / low clouds", icon: "🌫️" };
+  if (c >= 51 && c <= 55) return { label: "Drizzle", icon: "🌦️" };
+  if (c >= 61 && c <= 65) return { label: "Rain", icon: "🌧️" };
+  if (c === 66 || c === 67) return { label: "Freezing rain", icon: "🌧️" };
+  if (c >= 71 && c <= 75) return { label: "Snow", icon: "🌨️" };
+  if (c === 77) return { label: "Snow grains", icon: "❄️" };
+  if (c >= 80 && c <= 82) return { label: "Rain showers", icon: "🌦️" };
+  if (c === 85 || c === 86) return { label: "Snow showers", icon: "🌨️" };
+  if (c === 95) return { label: "Thunderstorm", icon: "⛈️" };
+  if (c === 96 || c === 99) return { label: "Thunderstorm with hail", icon: "⛈️" };
+
+  return { label: "Conditions unknown", icon: "?" };
+}
+
+
+/** ====================================================================
+ * Location Info (UPDATED FULLY)
+ * ==================================================================== */
+function renderLocationInfo(wp) {
+  if (!detailsLocationInfoBody || !wp) return;
+
+  const city     = wp.names?.city    || "";
+  const state    = wp.names?.state   || "";
+  const country  = wp.names?.country || "";
+  const flagUrl  = wp.meta?.flag     || "";
+
+  const currency  = getCurrencyInfo(wp.meta?.countryCode);
+  const localTime = formatLocalTime(wp);
+  const tzDisplay = formatTimeZoneWithOffset(wp);
+
+  const countryFlag = flagUrl
+    ? `<img src="${flagUrl}" style="width:20px;height:14px;border-radius:2px;border:1px solid #fff;">`
+    : "";
+
+  detailsLocationInfoBody.innerHTML = `
+
+    <div class="details-location-row">
+      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">City</div>
+      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">${escapeHTML(city)}</div>
+    </div>
+
+    <div class="details-location-row">
+      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">State / Province</div>
+      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">${escapeHTML(state)}</div>
+    </div>
+
+    <div class="details-location-row">
+      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Country</div>
+      <div class="details-kv-value" style="font-family:'SuiGenerisRg'; display:flex; justify-content:flex-end; align-items:center; gap:6px;">
+        ${countryFlag}
+        ${escapeHTML(country)}
+      </div>
+    </div>
+
+    <div class="details-location-row">
+      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Timezone</div>
+      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">
+        <span class="details-pill">${escapeHTML(tzDisplay)}</span>
+      </div>
+    </div>
+
+    <div class="details-location-row">
+      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Local Time</div>
+      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">${escapeHTML(localTime)}</div>
+    </div>
+
+    <div class="details-location-row">
+      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Currency</div>
+      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">
+        ${currency.code} – ${currency.name}
+        <span class="details-pill">${currency.symbol}</span>
+      </div>
+    </div>
+  `;
+}
+
+
+
+/** ====================================================================
+ * Distance formatting — miles first, km in gray
+ * ==================================================================== */
+function renderDistance(wp) {
+  if (!detailsDistanceContent || !wp) return;
+
+  const idx     = TRIP_ORDER.indexOf(wp.id);
+  const lastIdx = TRIP_ORDER.length - 1;
+
+  let html = "";
+
+  if (idx === 0) {
+    html += `<div style="font-family:'SuiGenerisRg'">Starting point of the journey.</div>`;
+  } else {
+    const prevId = TRIP_ORDER[idx - 1];
+    const legPrev = LEG_DIST[prevId];
+
+    if (legPrev) {
+      html += `
+        <div style="font-family:'SuiGenerisRg'">
+          Distance from previous stop:<br>
+          <strong style="color:#FFA50D">${legPrev.mi} mi</strong>
+          <span style="color:#A3A3A3">(${legPrev.km} km)</span>
+        </div>
+      `;
+    }
+  }
+
+  html += `<br><strong>Distance to Next</strong><br>`;
+
+  if (idx === lastIdx) {
+    html += `<div style="font-family:'SuiGenerisRg'">End of route.</div>`;
+  } else {
+    const legNext = LEG_DIST[wp.id];
+
+    if (legNext) {
+      html += `
+        <div style="font-family:'SuiGenerisRg'">
+          <strong style="color:#FFA50D">${legNext.mi} mi</strong>
+          <span style="color:#A3A3A3">(${legNext.km} km)</span>
+        </div>
+      `;
+    }
+  }
+
+  detailsDistanceContent.innerHTML = html;
+}
+
+
+
+/** ====================================================================
+ * WEATHER — Fahrenheit primary, Celsius gray secondary
+ * ==================================================================== */
+function renderWeather(wp) {
+  if (!detailsWeatherContent || !wp) return;
+
+  detailsWeatherContent.innerHTML =
+    `<div class="details-weather-status">Loading current weather…</div>`;
+
+  const [lon, lat] = wp.coords || [];
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    detailsWeatherContent.innerHTML =
+      `<div class="details-weather-error">Weather unavailable.</div>`;
+    return;
+  }
+
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+  const requestId = wp.id;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+
+      if (detailsSidebar.dataset.currentId !== requestId) return;
+
+      const cw = data?.current_weather;
+      if (!cw) throw new Error("Missing weather data");
+
+      const info = mapWeatherCodeToInfo(cw.weathercode);
+
+      const tempC = cw.temperature;
+      const tempF = +(tempC * 9/5 + 32).toFixed(1);
+
+      const windK = cw.windspeed;
+      const windM = +(windK * 0.621371).toFixed(1);
+
+      detailsWeatherContent.innerHTML = `
+        <div class="details-weather-main">
+          <div class="details-weather-icon">${info.icon}</div>
+
+          <div class="details-weather-temp" style="font-family:'SuiGenerisRg'; color:#FFA50D;">
+            ${tempF}°F 
+            <span style="color:#A3A3A3">(${tempC.toFixed(1)}°C)</span>
+          </div>
+        </div>
+
+        <div class="details-weather-meta">
+          <div class="details-weather-label">${info.label}</div>
+
+          <div class="details-weather-wind" style="font-family:'SuiGenerisRg'">
+            Wind: ${windM} mi/h 
+            <span style="color:#A3A3A3">(${windK} km/h)</span>
+          </div>
+        </div>
+      `;
+    })
+
+    .catch(() => {
+      if (detailsSidebar.dataset.currentId !== requestId) return;
+      detailsWeatherContent.innerHTML =
+        `<div class="details-weather-error">Weather unavailable.</div>`;
+    });
+}
+
+
+
+/** ====================================================================
+ * HUD sync logic (unchanged)
+ * ==================================================================== */
+function updateDetailsHud() {
+  const btnStart = document.getElementById("detailsSidebarStartJourney");
+  if (!detailsSidebarHud || !btnStart) return;
+
+  if (!journeyMode || !currentID) {
+    detailsSidebarHud.style.display = "none";
+    btnStart.style.display = "block";
+
+    btnStart.onclick = () => {
+      journeyMode = true;
+      currentID = TRIP_ORDER[0];
+      updateHUD();
+      openDetailsSidebar(currentID);
+    };
+
+    return;
+  }
+
+  btnStart.style.display = "none";
+  detailsSidebarHud.style.display = "block";
+
+  const idx = TRIP_ORDER.indexOf(currentID);
+  const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
+  const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
+
+  if (detailsHudPrev) detailsHudPrev.disabled = !prev;
+
+  if (detailsHudNext) {
+    detailsHudNext.textContent = "Next Stop";
+    detailsHudNext.disabled = !next;
+  }
+
+  if (detailsHudLabel) {
+    if (!next) {
+      detailsHudLabel.textContent = "";
+    } else {
+      const wpNext = getWP(next);
+      const mode = getLegMode(currentID);
+      const icon = MODE_ICONS[mode];
+
+      detailsHudLabel.innerHTML =
+        `Next Stop: <img src="${icon}" class="details-sidebar-hud-mode-icon"> ${escapeHTML(wpNext.location)}
+         <span class="details-sidebar-hud-flag" style="background-image:url('${wpNext.meta.flag}')"></span>`;
+    }
+  }
+}
+
+
+
+/** ==================== SIDEBAR HUD + START BUTTON LOGIC ==================== **/
+function updateSidebarJourneyState() {
+  if (journeyMode) {
+    detailsSidebarHud.style.display = "block";
+    document.getElementById("journeyToggle").style.display = "none";
+  } else {
+    detailsSidebarHud.style.display = "none";
+    document.getElementById("journeyToggle").style.display = "block";
+  }
+}
+
+
+
+/**
+ * Open the right-hand details sidebar for a waypoint.
+ * Uses:
+ *   w.names.display  → title
+ *   w.location       → restored location field
+ *   w.description    → description paragraph
+ *   w.links.*        → Google Maps links
+ */
+function openDetailsSidebar(id) {
+  const w = WAYPOINTS.find(x => x.id === id);
+  if (!w) return;
+
+  // Track which waypoint is currently active for async updates
+  detailsSidebar.dataset.currentId = w.id;
+
+  // Title + icon
+  detailsTitle.textContent = w.names?.display || "Unknown Location";
+  if (detailsIcon) {
+    detailsIcon.src = w.icon || "";
+    detailsIcon.alt = w.names?.display || "Waypoint icon";
+  }
+
+  // Location line with flag suffix
+  const locLabel = w.location || "";
+  const flagUrl  = w.meta?.flag || "";
+  const flagSpan = flagUrl
+    ? `<span class="details-location-flag-inline" style="background-image:url('${flagUrl}')"></span>`
+    : "";
+  detailsLocation.innerHTML =
+    `<span class="details-location-header-line">${escapeHTML(locLabel)} ${flagSpan}</span>`;
+
+  // Description
+  detailsDescription.textContent = w.description || "";
+
+  // Main image
+  detailsImage.src = w.image || "";
+  detailsImage.alt = w.names?.display || "Waypoint image";
+
+  // Explore links (existing)
+  detailsTourist.href = w.links?.search  || "#";
+  detailsToilets.href = w.links?.toilets || "#";
+  detailsHotels.href  = w.links?.hotels  || "#";
+
+  // A) Location Info
+  renderLocationInfo(w);
+
+  // B) Live Weather (async)
+  renderWeather(w);
+
+  // C) Distance from previous + to next
+  renderDistance(w);
+
+  // Sidebar HUD should reflect current journey state
+  updateDetailsHud();
+
+  // Show the sidebar + overlay
+  detailsSidebar.classList.add("open");
+  if (detailsOverlay) detailsOverlay.classList.add("open");
+}
+
+/** Close sidebar */
+function closeDetailsSidebar() {
+  detailsSidebar.classList.remove("open");
+  if (detailsOverlay) detailsOverlay.classList.remove("open");
+  delete detailsSidebar.dataset.currentId;
+}
+
+/* Close via X button */
+detailsClose.addEventListener("click", closeDetailsSidebar);
+
+/* Clicking on overlay closes the sidebar */
+if (detailsOverlay) {
+  detailsOverlay.addEventListener("click", () => {
+    if (detailsSidebar.classList.contains("open")) {
+      closeDetailsSidebar();
+    }
+  });
+}
+
+/* Close by clicking outside sidebar (EXCEPT clicking "Details" buttons) */
+document.addEventListener("click", (e) => {
+  if (!detailsSidebar.classList.contains("open")) return;
+
+  // Ignore clicks on the details button itself
+  if (e.target.closest(".details-btn")) return;
+
+  // Ignore clicks inside the sidebar
+  if (detailsSidebar.contains(e.target)) return;
+
+  // Overlay is handled separately; anything else closes the panel
+  closeDetailsSidebar();
+});
+
+/* ESC key closes the sidebar */
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && detailsSidebar.classList.contains("open")) {
+    closeDetailsSidebar();
+  }
+});
+
+/* Handle any "Details" button inside popups */
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".details-btn");
+  if (!btn) return;
+
+  const id = btn.dataset.details;
+  if (!id) return;
+
+  openDetailsSidebar(id);
+});
+
+/* Sidebar HUD click handlers (mirror bottom HUD) */
+if (detailsHudPrev) {
+  detailsHudPrev.addEventListener("click", () => {
+    if (!journeyMode) return;
+    const idx = TRIP_ORDER.indexOf(currentID);
+    if (idx > 0) {
+      const targetId = TRIP_ORDER[idx - 1];
+      undoTo(targetId);
+      if (detailsSidebar.classList.contains("open")) {
+        openDetailsSidebar(targetId);
+      }
+    }
+  });
+}
+
+if (detailsHudNext) {
+  detailsHudNext.addEventListener("click", () => {
+    if (!journeyMode) return;
+    const idx = TRIP_ORDER.indexOf(currentID);
+    if (idx < TRIP_ORDER.length - 1) {
+      const targetId = TRIP_ORDER[idx + 1];
+      animateLeg(currentID, targetId);
+      // animateLeg will call openDetailsSidebar at the end when the leg completes
+    }
+  });
+}
+
+/* Make sure the sidebar HUD stays in sync whenever the main HUD updates */
+const _origUpdateHUD = updateHUD;
+updateHUD = function () {
+  _origUpdateHUD();
+  updateDetailsHud();
+};
+
+
+
+
+
+
+/* ======================================================================= */
+/* ============================= HUD ====================================== */
+/* ======================================================================= */
+
+const hud = document.getElementById("journeyHud");
+const hudPrev = document.getElementById("hudPrev");
+const hudNext = document.getElementById("hudNext");
+const hudLabel = document.getElementById("hudLabel");
+
+function getHudLocationLabel(wp) {
+  return getLocationLabel(wp);
+}
+
+function getHudCountryCode(wp) {
+  return getCountryCode(wp);
+}
+
+function updateHUD() {
+  if (!journeyMode) {
+    hud.style.display = "none";
+    return;
+  }
+
+  hud.style.display = "block";
+
+  const idx = TRIP_ORDER.indexOf(currentID);
+  const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
+  const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
+
+  hudPrev.disabled = !prev;
+
+  if (next) {
+    const d = LEG_DIST[currentID];
+    let distLabel = "";
+    if (d) distLabel = ` – ${d.mi}mi (${d.km}km)`;
+
+    hudNext.textContent = "Next Stop" + distLabel;
+    hudNext.disabled = false;
+  } else {
+    hudNext.textContent = "Next Stop";
+    hudNext.disabled = true;
+  }
+
+  if (next) {
+    const mode = getLegMode(currentID);
+    const icon = MODE_ICONS[mode];
+    const wp = getWP(next);
+
+    hudLabel.innerHTML =
+      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(wp.location)} ` +
+      `<span class="hud-flag" style="background-image:url('${wp.meta.flag}')"></span>`;
+  } else {
+    hudLabel.textContent = "";
+  }
+}
+
+
+hudPrev.addEventListener("click", () => {
+  if (!journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(currentID);
+  if (idx > 0) undoTo(TRIP_ORDER[idx - 1]);
+});
+
+hudNext.addEventListener("click", () => {
+  if (!journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(currentID);
+  if (idx < TRIP_ORDER.length - 1) animateLeg(currentID, TRIP_ORDER[idx + 1]);
+});
+
+
+
+/* ======================================================================= */
+/* ========================== JOURNEY LOGIC =============================== */
+/* ======================================================================= */
+
+function getZoom(id) {
+  if (["sydney", "la", "toronto"].includes(id)) return 6.7;
+  return 9.4;
+}
+
+function getLegMode(id) {
+  const idx = TRIP_ORDER.indexOf(id);
+  const next = TRIP_ORDER[idx + 1];
+  if (next && isFlight(id, next)) return "Plane";
+  return getWP(id).mode;
+}
+
+function isFlight(a, b) {
+  return (a === "sydney" && b === "la") || (a === "la" && b === "toronto");
+}
+
+
+/* ======================================================================= */
+/* =================== BUILD COMPLETED ROUTE TO POINT ===================== */
+/* ======================================================================= */
+
+
+function buildCompleteUntil(id) {
+  const out = { flight: [], drive: [] };
+
+  const append = (arr, seg) => {
+    if (!seg.length) return;
+    if (!arr.length) {
+      arr.push(...seg);
+    } else {
+      // avoid duplicating the join vertex
+      arr.push(...seg.slice(1));
+    }
+  };
+
+  const idx = TRIP_ORDER.indexOf(id);
+
+  for (let i = 0; i < idx; i++) {
+    const a = TRIP_ORDER[i];
+    const b = TRIP_ORDER[i + 1];
+
+    if (isFlight(a, b)) {
+      append(out.flight, buildGreatCircle(a, b));
+    } else {
+      append(out.drive, roadLeg(a, b));
+    }
+  }
+
+  return out;
+}
+
+
+
+/* ======================================================================= */
+/* ======================== JOURNEY ANIMATION ============================= */
+/* ======================================================================= */
+
+function makeLineFeature(coords) {
+  return {
+    type: "Feature",
+    geometry: {
+      type: "LineString",
+      coordinates: Array.isArray(coords) ? coords : []
+    }
+  };
+}
+
+
+function animateLeg(a, b) {
+  if (a === b) return;
+  if (!map || !map.isStyleLoaded()) return;
+
+  stopOrbit();  // stop any existing orbit immediately
+
+  const isF = isFlight(a, b);
+  const seg = isF ? buildGreatCircle(a, b) : roadLeg(a, b);
+  if (!Array.isArray(seg) || seg.length === 0) return;
+
+  const srcF  = map.getSource("journey-flight");
+  const srcD  = map.getSource("journey-drive");
+  const srcC  = map.getSource("journey-current");
+
+  if (!srcF || !srcD || !srcC) return;
+
+  // Build completed segments up to A
+  const comp = buildCompleteUntil(a);
+
+  srcF.setData(makeLineFeature(comp.flight));
+  srcD.setData(makeLineFeature(comp.drive));
+  srcC.setData(makeLineFeature([]));   // clear current leg
+
+  // Style the current leg line (flight vs road)
+  const partialColor = isF ? "#478ED3" : "#FF9C57";
+  map.setPaintProperty("journey-current", "line-color", partialColor);
+  map.setPaintProperty("journey-current", "line-width", isF ? 3 : 4);
+  map.setPaintProperty("journey-current", "line-dasharray", isF ? [3, 2] : [1, 0]);
+
+  const duration = isF ? 4200 : 1800;
+
+  // Base travel zoom rules
+  const FLIGHT_TRAVEL_ZOOM = 3.0;                      // wide zoom for flights
+  const ROAD_TRAVEL_ZOOM   = ORBIT_ZOOM_TARGET - 2.5;  // light zoom-out for roads
+
+  const sydneyToLA = (a === "sydney" && b === "la");
+  const laToToronto = (a === "la" && b === "toronto");
+
+  let travelZoom;
+
+  if (isF) {
+    if (laToToronto) {
+      // You asked for 50% reduced zoom-out here
+      travelZoom = (FLIGHT_TRAVEL_ZOOM + JOURNEY_ZOOM_LA) / 2;
+    } else {
+      travelZoom = FLIGHT_TRAVEL_ZOOM;
+    }
+  } else {
+    travelZoom = ROAD_TRAVEL_ZOOM;
+  }
+
+  /* ======================================================================= */
+  /* ====================== SPECIAL CASE: SYDNEY → LA ====================== */
+  /* ======================================================================= */
+
+  if (sydneyToLA) {
+    const smooth = t => t * t * (3 - 2 * t);
+
+    const Syd = getWP(a);
+    const LA  = getWP(b);
+    if (!Syd || !LA) return;
+
+    const PHASE1 = 1600;   // zoom-out phase
+    const PHASE2 = 1600;   // wide pan phase
+    const PHASE3 = 2200;   // final focus-in phase
+
+    const finalZoom = JOURNEY_ZOOM_LA;
+
+    /* --------------------------- PHASE 1 -------------------------------- */
+    map.easeTo({
+      center: Syd.coords,
+      zoom: 3.5,
+      pitch: 0,
+      bearing: map.getBearing(),
+      duration: PHASE1,
+      easing: smooth
+    });
+
+    /* --------------------------- PHASE 2 -------------------------------- */
+    setTimeout(() => {
+      map.easeTo({
+        center: LA.coords,
+        zoom: 3.5,
+        pitch: 0,
+        bearing: map.getBearing(),
+        duration: PHASE2,
+        easing: smooth
+      });
+    }, PHASE1);
+
+    /* --------------------------- PHASE 3 -------------------------------- */
+    setTimeout(() => {
+      map.easeTo({
+        center: LA.coords,
+        zoom: finalZoom,
+        pitch: JOURNEY_PITCH_TARGET,
+        bearing: map.getBearing(),
+        duration: PHASE3,
+        easing: smooth
+      });
+    }, PHASE1 + PHASE2);
+
+    /* --------------------------- FINALIZE -------------------------------- */
+    setTimeout(() => {
+      currentID = b;
+      openPopupFor(b);
+      startOrbit(b);
+      updateHUD();
+
+      // keep sidebar in sync if it's open
+      if (detailsSidebar.classList.contains("open")) {
+        openDetailsSidebar(b);
+      }
+    }, PHASE1 + PHASE2 + PHASE3);
+
+    /* ---------------------- Polyline Animation --------------------------- */
+    const start = performance.now();
+    const total = seg.length;
+
+    function frame(t) {
+      const prog  = Math.min((t - start) / duration, 1);
+      const count = Math.max(2, Math.floor(prog * total));
+      const partial = seg.slice(0, count);
+
+      srcC.setData(makeLineFeature(partial));
+
+      if (prog < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        const after = buildCompleteUntil(b);
+
+        srcF.setData(makeLineFeature(after.flight));
+        srcD.setData(makeLineFeature(after.drive));
+        srcC.setData(makeLineFeature([]));
+      }
+    }
+
+    requestAnimationFrame(frame);
+    return;
+  }
+
+  /* ======================================================================= */
+  /* ======================= NORMAL JOURNEY BEHAVIOUR ====================== */
+  /* ======================================================================= */
+
+  const targetWP = getWP(b);
+  if (!targetWP) return;
+
+  map.easeTo({
+    center: targetWP.coords,
+    zoom: travelZoom,
+    pitch: 0,
+    bearing: 0,
+    duration: duration + 400,
+    essential: false
+  });
+
+  const startStandard = performance.now();
+  const totalStandard = seg.length;
+
+  function frameStandard(t) {
+    const prog = Math.min((t - startStandard) / duration, 1);
+    const count = Math.max(2, Math.floor(prog * totalStandard));
+    const partial = seg.slice(0, count);
+
+    srcC.setData(makeLineFeature(partial));
+
+    if (prog < 1) {
+      requestAnimationFrame(frameStandard);
+    } else {
+      const after = buildCompleteUntil(b);
+
+      srcF.setData(makeLineFeature(after.flight));
+      srcD.setData(makeLineFeature(after.drive));
+      srcC.setData(makeLineFeature([]));
+
+      openPopupFor(b);
+      currentID = b;
+      focusJourneyOrbit(b);
+      updateHUD();
+
+      // keep sidebar in sync if it's open
+      if (detailsSidebar.classList.contains("open")) {
+        openDetailsSidebar(b);
+      }
+    }
+  }
+
+  requestAnimationFrame(frameStandard);
+}
+
+
+
+
+
+/* ======================================================================= */
+/* ========================== UNDO LEG ==================================== */
+/* ======================================================================= */
+
+function undoTo(id) {
+  stopOrbit();  // leave any existing orbit
+
+  const srcF = map.getSource("journey-flight");
+  const srcD = map.getSource("journey-drive");
+  const srcC = map.getSource("journey-current");
+  if (!srcF || !srcD || !srcC) return;
+
+  const comp = buildCompleteUntil(id);
+
+  srcF.setData({
+    type: "Feature",
+    geometry: { type: "LineString", coordinates: comp.flight }
+  });
+  srcD.setData({
+    type: "Feature",
+    geometry: { type: "LineString", coordinates: comp.drive }
+  });
+  srcC.setData({
+    type: "Feature",
+    geometry: { type: "LineString", coordinates: [] }
+  });
+
+  openPopupFor(id);
+  currentID = id;
+
+  // When stepping back in journey mode, also use journey orbit focus (pitch 55°)
+  focusJourneyOrbit(id);
+  updateHUD();
+
+  // keep sidebar in sync if it's open
+  if (detailsSidebar.classList.contains("open")) {
+    openDetailsSidebar(id);
+  }
+}
+
+
+
+
+
+/* ======================================================================= */
+/* ======================== RESET MAP / JOURNEY =========================== */
+/* ======================================================================= */
+
+function resetJourney() {
+  if (!MAP_READY) return;
+
+  journeyMode = false;
+  spinning = true;
+  userInterrupted = false;
+  currentID = null;
+
+  document.getElementById("journeyToggle").textContent = "Start Journey";
+  document.getElementById("resetStaticMap").style.display = "none";
+
+  closeAllPopups();
+  stopOrbit();
+
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, "visibility", "none");
+      const src = map.getSource(id);
+      if (src) src.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
+    }
+  });
+
+  if (map.getLayer("flight-route"))
+    map.setLayoutProperty("flight-route","visibility","visible");
+  if (map.getLayer("drive-route"))
+    map.setLayoutProperty("drive-route","visibility","visible");
+
+  map.jumpTo({
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0
+  });
+
+  spinGlobe();
+  updateHUD();
+}
+
+
+/* Reset Map in static mode */
+document.getElementById("resetStaticMap").addEventListener("click", () => {
+  if (journeyMode) return;
+
+  userInterrupted = false;
+  spinning = true;
+
+  closeAllPopups();
+  stopOrbit();
+
+  map.jumpTo({
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0
+  });
+
+  spinGlobe();
+  document.getElementById("resetStaticMap").style.display = "none";
+});
+
+
+/* ======================================================================= */
+/* ======================== JOURNEY TOGGLE ================================ */
+/* ======================================================================= */
+
+document.getElementById("journeyToggle").addEventListener("click", () => {
+  if (journeyMode) resetJourney();
+  else startJourney();
+});
+
+function startJourney() {
+  if (!MAP_READY) return;
+
+  journeyMode = true;
+  spinning = false;
+  userInterrupted = true;
+
+  const journeyToggleBtn = document.getElementById("journeyToggle");
+  const resetStaticMapBtn = document.getElementById("resetStaticMap");
+
+  if (journeyToggleBtn) journeyToggleBtn.textContent = "Reset Journey";
+  if (resetStaticMapBtn) resetStaticMapBtn.style.display = "none";
+
+  // start at the first trip waypoint (Sydney)
+  currentID = TRIP_ORDER[0];
+
+  // hide static routes while in journey mode
+  if (map.getLayer("flight-route"))
+    map.setLayoutProperty("flight-route", "visibility", "none");
+  if (map.getLayer("drive-route"))
+    map.setLayoutProperty("drive-route", "visibility", "none");
+
+  // show journey layers and clear any previous data
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    if (map.getLayer(id))
+      map.setLayoutProperty(id, "visibility", "visible");
+    const src = map.getSource(id);
+    if (src)
+      src.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: [] }
+      });
+  });
+
+  // open Sydney popup
+  openPopupFor(currentID);
+
+  const wp = getWP(currentID);
+  if (!wp) {
+    updateHUD();
+    return;
+  }
+
+  // ---------------- TWO-STAGE START MOVEMENT INTO SYDNEY ----------------
+  // 1) smooth pan from default view → near Sydney at wide zoom / flat pitch
+  // 2) then smooth ease-in to journey focus (pitch 55, journey zoom) and start orbit
+
+  const START_PAN_DURATION   = 1800; // ms - first wide pan
+  const START_FOCUS_DURATION = 2200; // ms - then ease into focused journey orbit
+
+  const isLaOrToronto = (currentID === "la" || currentID === "toronto");
+  const journeyZoom   = isLaOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+
+  // kill any previous orbit timers / loops
+  stopOrbit();
+
+  // Stage 1: pan toward Sydney, wide zoom, flat pitch, smooth easing
+  map.easeTo({
+    center: wp.coords,
+    zoom: 3.5,                     // wide view to avoid clipping
+    pitch: 0,
+    bearing: map.getBearing(),
+    duration: START_PAN_DURATION,
+    easing: t => t * t * (3 - 2 * t) // cubic ease-in-out
+  });
+
+  // Stage 2: after pan finishes, zoom + pitch into journey focus (55°)
+  setTimeout(() => {
+    map.easeTo({
+      center: wp.coords,
+      zoom: journeyZoom,
+      pitch: JOURNEY_PITCH_TARGET,        // 55° journey pitch
+      bearing: map.getBearing(),
+      duration: START_FOCUS_DURATION,
+      easing: t => t * t * (3 - 2 * t)    // same smooth easing
+    });
+  }, START_PAN_DURATION);
+
+  // Schedule orbit to start only after both stages complete
+  if (orbitEnterTimer !== null) {
+    clearTimeout(orbitEnterTimer);
+    orbitEnterTimer = null;
+  }
+  orbitEnterTimer = setTimeout(() => {
+    orbitEnterTimer = null;
+    startOrbit(currentID);
+  }, START_PAN_DURATION + START_FOCUS_DURATION);
+
+  updateHUD();
+}
+
+
+
+/* ======================================================================= */
+/* ========================== INIT ON LOAD ================================ */
+/* ======================================================================= */
+
+map.on("load", async () => {
+  initDistances();
+
+  await addNation("aus","https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json","#1561CF",0.12);
+  await addNation("can","https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json","#CE2424",0.12);
+  await addNation("usa","https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json","#FFFFFF",0.12);
+
+  addStaticRoutes();
+  await buildDrivingRoute();
+  addJourneySources();
+  buildMarkers();
+
+  MAP_READY = true;
+
+  spinGlobe();
+});
+
+
+/* Add empty journey polyline sources */
+function addJourneySources() {
+  ["journey-flight","journey-drive","journey-current"].forEach(id => {
+    map.addSource(id, {
+      type: "geojson",
+      data: { type:"Feature", geometry:{ type:"LineString", coordinates: [] }}
+    });
+
+    map.addLayer({
+      id,
+      type: "line",
+      source: id,
+      layout: { "visibility": "none", "line-cap":"round", "line-join":"round" },
+      paint: {
+        "line-color": "#FF9C57",
+        "line-width": 4,
+        "line-opacity": 0.95
+      }
+    });
+  });
+
+  /* Flight layer dashed */
+  map.setPaintProperty("journey-flight", "line-color", "#478ED3");
+  map.setPaintProperty("journey-flight", "line-dasharray", [3, 2]);
+  map.setPaintProperty("journey-flight", "line-width", 3);
+}
+
+</script>
+</body>
+</html>
