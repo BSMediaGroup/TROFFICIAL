@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Cuntent Creator Map - Journey Routes</title>
+  <title>North America Trip – Donation Route</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Mapbox -->
@@ -1663,6 +1663,30 @@ const map = new mapboxgl.Map({
 });
 
 map.addControl(new mapboxgl.NavigationControl({showCompass:false}));
+
+
+/* ======================================================================= */
+/* ===================== GLOBE ATMOSPHERE & STARS ======================== */
+/* ======================================================================= */
+
+const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";      // darker, closer to space
+const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";  // subtle blue edge glow
+const FOG_HORIZON_BLEND  = 0.45;
+const FOG_SPACE_COLOR    = "#02040A";
+const FOG_STAR_INTENSITY = 0.65;                        // static brightness
+
+// no animation — static starfield
+map.on("style.load", () => {
+  map.setFog({
+    color: FOG_COLOR,
+    "high-color": FOG_HIGH_COLOR,
+    "horizon-blend": FOG_HORIZON_BLEND,
+    "space-color": FOG_SPACE_COLOR,
+    "star-intensity": FOG_STAR_INTENSITY
+  });
+});
+
+
 
 
 /* ======================================================================= */
