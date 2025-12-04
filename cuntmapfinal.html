@@ -44,101 +44,145 @@
       overflow: visible;
     }
 
-    /* ===================== OVERLAY ===================== */
-    .trip-overlay {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      z-index: 9999;
-      padding: 14px 18px;
-      width: 320px;
-      background: rgba(5,6,10,0.92);
-      border: 1px solid #606060;
-      border-radius: 10px;
-      box-shadow: 0 0 12px rgba(0,0,0,0.8);
-      color: #A3A3A3;
-    }
+	/* ===================== OVERLAY ===================== */
+	.trip-overlay {
+	  position: absolute;
+	  top: 12px;
+	  left: 12px;
+	  z-index: 9999;
+	  padding: 14px 18px;
+	  width: 320px;
+	  background: rgba(5,6,10,0.92);
+	  border: 1px solid #606060;
+	  border-radius: 10px;
+	  box-shadow: 0 0 12px rgba(0,0,0,0.8);
+	  color: #A3A3A3;
+	}
 
-    .trip-overlay-title {
-      font-family: "RechargeBd";
-      font-size: 18px;
-      letter-spacing: 0.06em;
-      color: #F0F0F0;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
+	.trip-overlay-title {
+	  font-family: "RechargeBd";
+	  font-size: 16px;
+	  letter-spacing: 0.06em;
+	  color: #F0F0F0;
+	  text-transform: uppercase;
+	  margin-bottom: 4px;
+	}
 
-    .trip-overlay-subtitle {
-      font-size: 13px;
-      margin-bottom: 10px;
-    }
+	.trip-overlay-subtitle {
+	  font-size: 13px;
+	  margin-bottom: 10px;
+	}
 
-    .trip-legend-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 11px;
-      margin-bottom: 6px;
-    }
+	.trip-legend-row {
+	  display: flex;
+	  align-items: center;
+	  gap: 8px;
+	  font-size: 11px;
+	  margin-bottom: 6px;
+	}
 
-    .legend-line {
-      width: 22px;
-    }
+	.legend-line {
+	  width: 22px;
+	}
 
-    .trip-legend-row img {
-      width: 16px;
-      height: 16px;
-    }
+	.trip-legend-row img {
+	  width: 16px;
+	  height: 16px;
+	}
 
-    #legendTotalDistance {
-      margin-top: 10px;
-      padding-top: 6px;
-      border-top: 1px solid #505050;
-      color: #F0F0F0;
-      font-size: 11px;
-    }
+	#legendTotalDistance {
+	  margin-top: 10px;
+	  padding-top: 6px;
+	  border-top: 1px solid #505050;
+	  color: #F0F0F0;
+	  font-size: 11px;
+	}
 
-    /* ===================== BUTTONS ===================== */
-    .trip-journey-btn {
-      margin-top: 12px;
-      width: 100%;
-      padding: 8px 10px;
-      border-radius: 6px;
-      border: 1px solid #FFA50D;
-      background: rgba(5,6,10,0.95);
-      color: #FFA50D;
-      font-family: "RechargeBd";
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-    }
+	/* collapsible legend block (subtitle + rows + distance) */
+	#legendContainer {
+	  overflow: hidden;
+	  max-height: 600px;
+	  opacity: 1;
+	  transition: max-height 0.25s ease, opacity 0.25s ease;
+	}
 
-    .trip-journey-btn:hover {
-      background: #FFA50D;
-      color: #05060A;
-    }
+	#legendContainer.legend-collapsed {
+	  max-height: 0;
+	  opacity: 0;
+	}
 
-    /* RESET MAP (static mode only) */
-    #resetStaticMap {
-      display: none;
-      margin-top: 10px;
-      width: 100%;
-      padding: 7px 10px;
-      border-radius: 6px;
-      border: 1px solid #A0A0A0;
-      background: rgba(5,6,10,0.85);
-      color: #E0E0E0;
-      font-family: "RechargeBd";
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      cursor: pointer;
-    }
-    #resetStaticMap:hover {
-      background: #E0E0E0;
-      color: #05060A;
-    }
+	/* slim icon+label toggle positioned just UNDER the overlay box */
+	.legend-toggle-btn {
+	  position: absolute;
+	  left: 0px;            /* SHIFTED FROM 12px → 0px (true container edge) */
+	  bottom: -28px;        /* WAS -24px → now -28px (extra 4px gap) */
+	  background: transparent;
+	  border: none;
+	  padding: 2px 0 4px;
+	  display: flex;
+	  justify-content: flex-start;
+	  align-items: center;
+	  gap: 6px;
+	  cursor: pointer;
+	}
+
+	.legend-toggle-label {
+	  font-family: "SuiGenerisRg";
+	  font-size: 8px;
+	  letter-spacing: 0.08em;
+	  color: #A3A3A3;
+	  text-shadow: 0 0 6px rgba(0,0,0,0.55);
+	}
+
+	.legend-toggle-btn img {
+	  width: 18px;
+	  height: 18px;
+	  display: block;
+	  filter: invert(65%) sepia(0%) saturate(0%) hue-rotate(180deg) brightness(95%) contrast(90%)
+			  drop-shadow(0 0 4px rgba(0,0,0,0.55));
+	}
+
+	/* ===================== BUTTONS ===================== */
+	.trip-journey-btn {
+	  margin-top: 4px;
+	  width: 100%;
+	  padding: 8px 10px;
+	  border-radius: 6px;
+	  border: 1px solid #FFA50D;
+	  background: rgba(5,6,10,0.95);
+	  color: #FFA50D;
+	  font-family: "RechargeBd";
+	  font-size: 11px;
+	  letter-spacing: 0.08em;
+	  text-transform: uppercase;
+	  cursor: pointer;
+	}
+
+	.trip-journey-btn:hover {
+	  background: #FFA50D;
+	  color: #05060A;
+	}
+
+	#resetStaticMap {
+	  display: none;
+	  margin-top: 10px;
+	  width: 100%;
+	  padding: 7px 10px;
+	  border-radius: 6px;
+	  border: 1px solid #A0A0A0;
+	  background: rgba(5,6,10,0.85);
+	  color: #E0E0E0;
+	  font-family: "RechargeBd";
+	  font-size: 10px;
+	  letter-spacing: 0.06em;
+	  text-transform: uppercase;
+	  cursor: pointer;
+	}
+	#resetStaticMap:hover {
+	  background: #E0E0E0;
+	  color: #05060A;
+	}
+
 
     /* ===================== POPUPS ===================== */
     .mapboxgl-popup {
@@ -692,18 +736,13 @@
 
 <div id="map"></div>
 
+<!-- ========================= OVERLAY / LEGEND ========================= -->
+
 <div class="trip-overlay">
+  <div class="trip-overlay-title">Cuntent Creator Map</div>
 
-  <!-- COLLAPSIBLE LEGEND TOGGLE BUTTON -->
-  <button id="legendToggle" class="trip-journey-btn" style="margin-bottom:10px;">
-    LEGEND ▼
-  </button>
-
-  <!-- LEGEND CONTAINER (ALL EXISTING CONTENT MOVED INSIDE) -->
+  <!-- LEGEND CONTENT THAT COLLAPSES (subtitle + legend + distance) -->
   <div id="legendContainer">
-
-    <div class="trip-overlay-title">North America Trip Route</div>
-
     <div class="trip-overlay-subtitle">
       Sydney → L.A. → Toronto flights, then road trip via Buffalo, NYC & Hoboken to Toms River.
     </div>
@@ -711,7 +750,6 @@
     <div class="trip-legend-row">
       <span class="legend-line" style="border-top:2px dashed #478ED3"></span> Flights
     </div>
-
     <div class="trip-legend-row">
       <span class="legend-line" style="border-top:2px solid #FF9C57"></span> Driving Route
     </div>
@@ -719,32 +757,35 @@
     <div class="trip-legend-row">
       <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg"> Departure
     </div>
-
     <div class="trip-legend-row">
       <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg"> Final Destination
     </div>
-
     <div class="trip-legend-row">
       <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg"> Arrival / Toronto
     </div>
-
     <div class="trip-legend-row">
       <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg"> Major Waypoints
     </div>
-
     <div class="trip-legend-row">
       <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"> Minor Waypoints
     </div>
 
     <div id="legendTotalDistance">Total Distance: calculating…</div>
   </div>
-  <!-- END LEGEND CONTAINER -->
 
   <button id="journeyToggle" class="trip-journey-btn">Start Journey</button>
   <button id="resetStaticMap">Reset Map</button>
 
+  <!-- DISCREET ICON + LABEL TOGGLE, VISUALLY JUST UNDER THE CARD -->
+  <button id="legendToggle" class="legend-toggle-btn" type="button">
+    <img
+      id="legendToggleIcon"
+      src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/collapse.svg"
+      alt="Toggle legend"
+    >
+    <span id="legendToggleLabel" class="legend-toggle-label">COLLAPSE</span>
+  </button>
 </div>
-
 
 <div id="journeyHud" class="journey-hud">
   <div class="journey-hud-buttons">
@@ -753,6 +794,8 @@
   </div>
   <div id="hudLabel" class="journey-hud-label"></div>
 </div>
+
+
 
 
 
@@ -886,27 +929,38 @@ function escapeHTML(value) {
 /* ========================= LEGEND COLLAPSE LOGIC ======================== */
 /* ======================================================================= */
 
-const _legendToggle    = document.getElementById("legendToggle");
-const _legendContainer = document.getElementById("legendContainer");
+const legendToggle     = document.getElementById("legendToggle");
+const legendToggleIcon = document.getElementById("legendToggleIcon");
+const legendToggleLabel= document.getElementById("legendToggleLabel");
+const legendContainer  = document.getElementById("legendContainer");
 
-let _legendCollapsed = false;
+const LEGEND_EXPAND_ICON   = "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/expand.svg";
+const LEGEND_COLLAPSE_ICON = "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/collapse.svg";
+
+let legendCollapsed = false;
 
 function updateLegendUI() {
-  if (_legendCollapsed) {
-    _legendContainer.classList.add("collapsed");
-    _legendToggle.textContent = "LEGEND ▲";
+  if (!legendToggle || !legendToggleIcon || !legendToggleLabel || !legendContainer) return;
+
+  if (legendCollapsed) {
+    legendContainer.classList.add("legend-collapsed");
+    legendToggleIcon.src = LEGEND_EXPAND_ICON;
+    legendToggleLabel.textContent = "EXPAND";
   } else {
-    _legendContainer.classList.remove("collapsed");
-    _legendToggle.textContent = "LEGEND ▼";
+    legendContainer.classList.remove("legend-collapsed");
+    legendToggleIcon.src = LEGEND_COLLAPSE_ICON;
+    legendToggleLabel.textContent = "COLLAPSE";
   }
 }
 
-_legendToggle.addEventListener("click", () => {
-  _legendCollapsed = !_legendCollapsed;
-  updateLegendUI();
-});
+if (legendToggle && legendToggleIcon && legendToggleLabel && legendContainer) {
+  legendToggle.addEventListener("click", () => {
+    legendCollapsed = !legendCollapsed;
+    updateLegendUI();
+  });
 
-updateLegendUI();
+  updateLegendUI();
+}
 
 
 
