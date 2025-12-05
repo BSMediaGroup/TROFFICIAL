@@ -1,0 +1,322 @@
+/* =======================================================
+   ============= GLOBAL LAYOUT & MAP CONTAINER ============
+   ======================================================= */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+  font-family: 'Gemunu Libre', sans-serif;
+  color: #e8e8e8;
+}
+
+#map {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+
+/* =======================================================
+   ========================= HUD ==========================
+   ======================================================= */
+
+#hud-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.hud-block {
+  background: rgba(20, 20, 40, 0.75);
+  backdrop-filter: blur(4px);
+  padding: 6px 12px;
+  border-left: 3px solid #00aaff;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: #b9dcff;
+  pointer-events: none;
+}
+
+
+/* =======================================================
+   ==================== JOURNEY CONTROLS =================
+   ======================================================= */
+
+#journey-controls {
+  position: absolute;
+  bottom: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 9999;
+}
+
+.journey-btn {
+  background: rgba(15, 15, 30, 0.85);
+  color: #d4eaff;
+  border: 1px solid #005577;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.journey-btn:hover {
+  background: rgba(0, 80, 120, 0.7);
+  border-color: #00aaff;
+}
+
+
+/* =======================================================
+   ===================== SIDEBAR PANEL ===================
+   ======================================================= */
+
+#sidebar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 320px;
+  height: 100vh;
+  background: rgba(10, 10, 25, 0.92);
+  backdrop-filter: blur(10px);
+  border-left: 2px solid #004a6f;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  padding: 15px;
+  color: #d0e7ff;
+  z-index: 9999;
+  overflow-y: auto;
+}
+
+#sidebar.sidebar-open {
+  transform: translateX(0);
+}
+
+#sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #003c5a;
+}
+
+#sidebar-title {
+  font-size: 22px;
+  color: #b8deff;
+}
+
+#sidebar-close {
+  background: none;
+  border: none;
+  color: #66bfff;
+  font-size: 22px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+#sidebar-close:hover {
+  color: #00aaff;
+}
+
+.sidebar-section {
+  margin-top: 18px;
+}
+
+.sidebar-section h3 {
+  font-size: 17px;
+  color: #94ceff;
+  border-bottom: 1px solid #003c5a;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+
+/* =======================================================
+   ====================== AMENITIES =======================
+   ======================================================= */
+
+#amenities-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.amenity-block {
+  background: rgba(5, 5, 20, 0.6);
+  padding: 10px;
+  border: 1px solid #00334f;
+  border-radius: 4px;
+}
+
+.amenity-block h4 {
+  margin: 0 0 6px 0;
+  color: #88d1ff;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
+.amenity-none {
+  color: #7e9cb7;
+  font-size: 13px;
+}
+
+.amenity-row {
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: #c6e6ff;
+  border-bottom: 1px dashed #003c5a;
+  transition: color 0.15s;
+}
+
+.amenity-row:last-child {
+  border-bottom: none;
+}
+
+.amenity-row:hover {
+  color: #00aaff;
+}
+
+
+/* =======================================================
+   ======================== MARKERS =======================
+   ======================================================= */
+
+.dc-marker {
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.dc-marker-img {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 4px #000);
+  transition: transform 0.2s, filter 0.2s;
+}
+
+.marker-major .dc-marker-img {
+  filter: drop-shadow(0 0 6px #00d2ff);
+}
+
+.marker-minor .dc-marker-img {
+  opacity: 0.85;
+}
+
+.marker-departure .dc-marker-img {
+  filter: drop-shadow(0 0 6px #ffaa00);
+}
+
+.dc-marker-img:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 8px #00aaff);
+}
+
+.marker-active {
+  transform: scale(1.25) !important;
+  filter: drop-shadow(0 0 10px #00ccff) !important;
+}
+
+
+/* =======================================================
+   ======================== LEGEND ========================
+   ======================================================= */
+
+#legend-container {
+  position: absolute;
+  bottom: 25px;
+  right: 25px;
+  background: rgba(10, 10, 25, 0.85);
+  padding: 12px 16px;
+  border: 1px solid #00354e;
+  border-radius: 4px;
+  z-index: 9999;
+  color: #cfe9ff;
+  font-size: 14px;
+  backdrop-filter: blur(6px);
+}
+
+#legend-container h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #9dd6ff;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.legend-marker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.marker-major {
+  background: #00c6ff;
+}
+
+.marker-minor {
+  background: #ffaa00;
+}
+
+.flight-line,
+.road-line {
+  width: 22px;
+  height: 3px;
+}
+
+.flight-line {
+  background: #00aaff;
+}
+
+.road-line {
+  background: #ffaa00;
+}
+
+
+/* =======================================================
+   ======================= SCROLLBAR ======================
+   ======================================================= */
+
+#sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+#sidebar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+#sidebar::-webkit-scrollbar-thumb {
+  background: #0077aa;
+}
+
+
+/* =======================================================
+   ======================== ANIMATIONS ====================
+   ======================================================= */
+
+@keyframes glowPulse {
+  0% { filter: drop-shadow(0 0 4px #00aaff); }
+  50% { filter: drop-shadow(0 0 8px #00e1ff); }
+  100% { filter: drop-shadow(0 0 4px #00aaff); }
+}
+
+.marker-active {
+  animation: glowPulse 1.8s infinite;
+}
