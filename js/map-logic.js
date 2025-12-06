@@ -210,6 +210,17 @@ function roadLeg(a, b) {
 }
 
 /* =======================================================================
+   FIX: REQUIRED BY map-core.js — RESTORE addStaticRoutes()
+   (map-style.js already creates the static layers, so this must NOT duplicate them)
+======================================================================= */
+
+window.addStaticRoutes = function () {
+    console.log("addStaticRoutes(): static routes already handled by map-style.js");
+    // This function intentionally does NOT add sources or layers,
+    // it only exists so map-core.js sees the global and continues initialization.
+};
+
+/* =======================================================================
    JOURNEY SOURCES — OK
 ======================================================================= */
 
@@ -587,3 +598,4 @@ window.startJourney = function () {
 };
 
 console.log("%cmap-logic.js fully loaded", "color:#00ff88;font-weight:bold;");
+
