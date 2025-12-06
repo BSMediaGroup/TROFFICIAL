@@ -1,33 +1,61 @@
 /* ==========================================================================
-   MAP CORE ORCHESTRATOR — v2 (REBUILT CLEAN)
-   Single responsibility:
-   - Validate module load order
-   - Wait for map-style.js to create window.__MAP
-   - Run full initialization sequence when map loads
+   MAP CORE ORCHESTRATOR — v2 (HARD LOAD ORDER SAFE)
    ========================================================================== */
 
 console.log("%cmap-core.js loaded", "color:#00d0ff; font-weight:bold;");
 
-/* ==========================================================================
-   SAFETY VALIDATION — ensure essential globals exist
-   ========================================================================== */
+/* --------------------------------------------------------------------------
+   HARD BLOCKER:
+   Do NOT run ANYTHING until map-style.js has created window.__MAP.
+   -------------------------------------------------------------------------- */
 
-function requireGlobal(name) {
-    if (typeof window[name] === "undefined") {
-        console.error(`❌ map-core: Missing global ${name}`);
-        throw new Error(`Missing global ${name}`);
+function waitForMap(callback) {
+    if (window.__MAP) {
+        callback();
+        return;
     }
+    console.warn("map-core.js: __MAP not ready — waiting...");
+    setTimeout(() => waitForMap(callback), 30);
 }
 
-[
-    "__MAP",
-    "WAYPOINTS",
-    "TRIP_ORDER",
-    "initializeStyleLayers",
-    "buildMarkers",
-    "updateHUD",
-    "bindGlobalUI"
-].forEach(requireGlobal);
+/* ==========================================================================
+   MAIN INITIALIZATION GATE
+   ========================================================================== */
+
+waitForMap(() => {
+    console.log("%cmap-core.js: __MAP detected", "color:#00ffaa;");
+
+    /* Sanity checks */
+    [
+        "WAYPOINTS",
+        "TRIP_ORDER",
+        "initializeStyleLayers",
+        "buildMarkers",
+        "updateHUD",
+        "bindGlobalUI"
+    ].forEach(name => {
+        if (typeof window[name] === "undefined") {
+            console.error(`❌ map-core: Missing global ${name}`);
+            throw new Error(`Missing global: ${name}`);
+        }
+    });
+
+    /* Wait for map load */
+    window.__MAP.once("load", () => {
+        console.log("%cmap-core: Map load event fired", "color:#00ffaa;");
+
+        initializeStyleLayers();
+        buildMarkers();
+        updateHUD();
+        bindGlobalUI();
+
+        window.MAP_READY = true;
+        console.log("%c✓ MAP SYSTEM READY", "color:#00ffcc; font-weight:bold;");
+    });
+});
+
+console.log("%cmap-core.js fully loaded", "color:#00eaff; font-weight:bold;");
+
 
 /* ==========================================================================
    MAIN BOOTSTRAP — map load event
