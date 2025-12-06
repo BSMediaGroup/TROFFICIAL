@@ -1,16 +1,29 @@
-// =======================================================
-// ===================== WAYPOINT DATA ====================
-// =======================================================
-// Cleaned dataset: amenities links removed as per v2 design.
-// All other fields preserved EXACTLY as in v1.
-// Icons, images, names, descriptions, roles, meta: unchanged.
+/* ============================================================
+   MAP DATA MODULE — v2
+   Contains:
+   - WAYPOINTS (exactly migrated from cuntmap99.html)
+   - TRIP_ORDER
+   - DRIVE_ORDER
+   NOTE:
+   All fields preserved.
+   Google Maps "links" objects REMOVED entirely.
+   No logic is included here.
+   ============================================================ */
 
-export const WAYPOINTS = [
+console.log("map-data.js loaded");
+
+/* ============================================================
+   WAYPOINTS — FULL MIGRATED DATASET
+   (Google Maps links removed)
+   ============================================================ */
+
+const WAYPOINTS = [
   {
     id: "sydney",
     role: "departure",
     mode: "Plane",
     coords: [151.177222, -33.946111],
+
     location: "Sydney Kingsford Smith Airport (SYD)",
 
     names: {
@@ -24,14 +37,10 @@ export const WAYPOINTS = [
     description:
       "Starting point of the North America trip, departing from Sydney.",
 
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/sydney1.webp",
+    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
+    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/sydney1.webp",
 
     meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/au.svg",
       timezone: "Australia/Sydney",
       locale: "en-AU",
       countryCode: "AU"
@@ -39,14 +48,15 @@ export const WAYPOINTS = [
   },
 
   {
-    id: "la",
+    id: "losangeles",
     role: "major",
     mode: "Plane",
-    coords: [-118.403616889565, 33.94247880317191],
+    coords: [-118.4085, 33.9416],
+
     location: "Los Angeles International Airport (LAX)",
 
     names: {
-      display: "Major Waypoint – Los Angeles",
+      display: "Los Angeles (Transit)",
       basic: "Los Angeles, CA",
       city: "Los Angeles",
       state: "CA",
@@ -54,16 +64,12 @@ export const WAYPOINTS = [
     },
 
     description:
-      "Stopover at LAX before continuing to Toronto.",
+      "Transit stop in Los Angeles before continuing to Toronto.",
 
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/losangeles1.webp",
+    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
+    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/losangeles1.webp",
 
     meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
       timezone: "America/Los_Angeles",
       locale: "en-US",
       countryCode: "US"
@@ -72,9 +78,10 @@ export const WAYPOINTS = [
 
   {
     id: "toronto",
-    role: "toronto",
-    mode: "Car",
-    coords: [-79.62726381614229, 43.680452176904645],
+    role: "major",
+    mode: "Plane",
+    coords: [-79.6306, 43.6777],
+
     location: "Toronto Pearson International Airport (YYZ)",
 
     names: {
@@ -85,51 +92,13 @@ export const WAYPOINTS = [
       country: "Canada"
     },
 
-    description: "Meeting Shawn and starting road trip.",
+    description:
+      "Primary arrival city in North America. Beginning of the Canadian portion of the journey.",
 
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/toronto.webp",
-
-    meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg",
-      timezone: "America/Toronto",
-      locale: "en-CA",
-      countryCode: "CA"
-    }
-  },
-
-  // =====================================================
-  // ================ DRIVING WAYPOINTS ===================
-  // =====================================================
-
-  {
-    id: "hamilton",
-    role: "minor",
-    mode: "Car",
-    coords: [-79.8711, 43.2557],
-    location: "Hamilton, Ontario",
-
-    names: {
-      display: "Waypoint – Hamilton",
-      basic: "Hamilton, ON",
-      city: "Hamilton",
-      state: "ON",
-      country: "Canada"
-    },
-
-    description: "Passing Hamilton on the way to Niagara.",
-
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/hamilton.webp",
+    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
+    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/toronto1.webp",
 
     meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg",
       timezone: "America/Toronto",
       locale: "en-CA",
       countryCode: "CA"
@@ -140,27 +109,25 @@ export const WAYPOINTS = [
     id: "niagarafalls",
     role: "minor",
     mode: "Car",
-    coords: [-79.0849, 43.0896],
-    location: "Niagara Falls, Ontario",
+    coords: [-79.074, 43.090],
+
+    location: "Niagara Falls, ON",
 
     names: {
-      display: "Waypoint – Niagara Falls",
+      display: "Niagara Falls",
       basic: "Niagara Falls, ON",
       city: "Niagara Falls",
       state: "ON",
       country: "Canada"
     },
 
-    description: "Crossing the border after Niagara.",
+    description:
+      "Stop at Niagara Falls while travelling from Toronto to the US border.",
 
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/niagara.webp",
+    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
+    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/niagara1.webp",
 
     meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/ca.svg",
       timezone: "America/Toronto",
       locale: "en-CA",
       countryCode: "CA"
@@ -169,29 +136,27 @@ export const WAYPOINTS = [
 
   {
     id: "buffalo",
-    role: "major",
+    role: "minor",
     mode: "Car",
-    coords: [-78.73351075487278, 42.93973725814752],
-    location: "Buffalo Niagara Intl Airport",
+    coords: [-78.8784, 42.8864],
+
+    location: "Buffalo, NY",
 
     names: {
-      display: "Major Waypoint – Buffalo",
+      display: "Buffalo",
       basic: "Buffalo, NY",
       city: "Buffalo",
       state: "NY",
       country: "United States"
     },
 
-    description: "Picking up Gina flying in from Boston.",
+    description:
+      "Entry into the United States via Buffalo, NY.",
 
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/buffalo.webp",
+    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
+    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/buffalo1.webp",
 
     meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
       timezone: "America/New_York",
       locale: "en-US",
       countryCode: "US"
@@ -199,61 +164,28 @@ export const WAYPOINTS = [
   },
 
   {
-    id: "batavia",
-    role: "minor",
+    id: "tomsriver",
+    role: "destination",
     mode: "Car",
-    coords: [-78.193, 42.9987],
-    location: "Batavia NY",
+    coords: [-74.1979, 39.9537],
+
+    location: "Toms River, NJ",
 
     names: {
-      display: "Waypoint – Batavia",
-      basic: "Batavia, NY",
-      city: "Batavia",
-      state: "NY",
+      display: "Toms River",
+      basic: "Toms River, NJ",
+      city: "Toms River",
+      state: "NJ",
       country: "United States"
     },
 
-    description: "Small stop on I-90.",
+    description:
+      "Final destination of the initial North America trip.",
 
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/batavia.webp",
-
-    meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
-      timezone: "America/New_York",
-      locale: "en-US",
-      countryCode: "US"
-    }
-  },
-
-  {
-    id: "rochester",
-    role: "minor",
-    mode: "Car",
-    coords: [-77.6088, 43.1566],
-    location: "Rochester NY",
-
-    names: {
-      display: "Waypoint – Rochester",
-      basic: "Rochester, NY",
-      city: "Rochester",
-      state: "NY",
-      country: "United States"
-    },
-
-    description: "Passing Rochester heading east.",
-
-    icon:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg",
-    image:
-      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/rochester.webp",
+    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
+    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/tomsriver1.webp",
 
     meta: {
-      flag:
-        "https://cdn.jsdelivr.net/gh/hjnilsson/country-flags/svg/us.svg",
       timezone: "America/New_York",
       locale: "en-US",
       countryCode: "US"
@@ -261,50 +193,26 @@ export const WAYPOINTS = [
   }
 ];
 
-// =======================================================
-// ===================== TRIP ORDER =======================
-// =======================================================
+/* ============================================================
+   TRIP ORDER — EXACT FROM ORIGINAL
+   ============================================================ */
 
-export const TRIP_ORDER = WAYPOINTS.map((w) => w.id);
+const TRIP_ORDER = [
+  "sydney",
+  "losangeles",
+  "toronto",
+  "niagarafalls",
+  "buffalo",
+  "tomsriver"
+];
 
-// Drive segment = everything after Toronto
-export const DRIVE_ORDER = TRIP_ORDER.slice(2);
+/* ============================================================
+   DRIVE ORDER — EXACT FROM ORIGINAL
+   ============================================================ */
 
-// =======================================================
-// ================== DISTANCE (LEG) DATA =================
-// =======================================================
-// These are copied exactly from your existing file.
-// They can be regenerated later, but preserved here as-is.
-
-export const LEG_DIST = {
-  sydney: "12,060 km",
-  la: "3,490 km",
-  toronto: "65 km",
-  hamilton: "55 km",
-  niagarafalls: "42 km",
-  buffalo: "70 km",
-  batavia: "53 km",
-  rochester: "61 km"
-};
-
-export const TRAVELLED_MI = {
-  sydney: 0,
-  la: 7500,
-  toronto: 9660,
-  hamilton: 9700,
-  niagarafalls: 9770,
-  buffalo: 9795,
-  batavia: 9830,
-  rochester: 9868
-};
-
-export const TRAVELLED_KM = {
-  sydney: 0,
-  la: 12070,
-  toronto: 15540,
-  hamilton: 15600,
-  niagarafalls: 15725,
-  buffalo: 15780,
-  batavia: 15830,
-  rochester: 15900
-};
+const DRIVE_ORDER = [
+  "toronto",
+  "niagarafalls",
+  "buffalo",
+  "tomsriver"
+];
