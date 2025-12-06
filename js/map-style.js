@@ -1,16 +1,5 @@
 /* ============================================================
-   MAP STYLE INITIALIZATION — v2
-   This module loads:
-   - Base Mapbox style
-   - Globe projection
-   - Fog & starfield
-   - Terrain (stub)
-   - 3D buildings (toggle)
-   - Nation shading layers
-   - Sunlight system (stubs)
-   NOTE:
-   All styling values are migrated from the original file.
-   No UI or logic changes are made here.
+   MAP STYLE INITIALIZATION — v2 (defensive)
    ============================================================ */
 
 console.log("map-style.js loaded");
@@ -33,7 +22,7 @@ const map = new mapboxgl.Map({
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
 /* ============================================================
-   FOG / STARFIELD — MIGRATED EXACTLY
+   FOG / STARFIELD
    ============================================================ */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
@@ -53,26 +42,16 @@ map.on("style.load", () => {
 });
 
 /* ============================================================
-   TERRAIN + SKY (scaffolding only)
+   TERRAIN (stub – can be enabled later)
    ============================================================ */
 
-/*
-   dark-v11 supports globe & fog but has no DEM source by default.
-   We’ll wire terrain later if/when you want it.
-*/
 function enableTerrain() {
-  // Example (commented for now):
-  // map.addSource("mapbox-dem", {
-  //   type: "raster-dem",
-  //   url: "mapbox://mapbox.terrain-rgb",
-  //   tileSize: 512,
-  //   maxzoom: 14
-  // });
-  // map.setTerrain({ source: "mapbox-dem", exaggeration: 1.0 });
+  // Placeholder for DEM source / terrain.
+  // Left disabled for stability.
 }
 
 /* ============================================================
-   3D BUILDINGS — TOGGLE SYSTEM
+   3D BUILDINGS TOGGLE
    ============================================================ */
 
 let buildingsEnabled = false;
@@ -81,17 +60,18 @@ function enable3DBuildings() {
   if (buildingsEnabled) return;
   buildingsEnabled = true;
 
-  const layers = map.getStyle().layers;
-  if (!layers) return;
+  const style = map.getStyle();
+  if (!style || !style.layers) return;
 
-  // Find first symbol layer with text to insert buildings underneath
   let labelLayerId = null;
-  for (const layer of layers) {
+  for (const layer of style.layers) {
     if (layer.type === "symbol" && layer.layout && layer.layout["text-field"]) {
       labelLayerId = layer.id;
       break;
     }
   }
+
+  if (map.getLayer("3d-buildings")) return;
 
   map.addLayer(
     {
@@ -127,14 +107,10 @@ function enable3DBuildings() {
    SUNLIGHT SYSTEM (stub)
    ============================================================ */
 
-/**
- * Compute sun direction based on local time.
- * This is a placeholder; full model can come later.
- */
 function computeSunDirectionForWaypoint(wp) {
   try {
     const now = new Date();
-    const tz  = wp.meta?.timezone;
+    const tz = wp.meta?.timezone;
 
     const hour = Number(
       new Intl.DateTimeFormat("en-US", {
@@ -144,7 +120,7 @@ function computeSunDirectionForWaypoint(wp) {
       }).format(now)
     );
 
-    const altitude = Math.max(5, Math.min(60, (hour - 6) * 10)); // crude placeholder
+    const altitude = Math.max(5, Math.min(60, (hour - 6) * 10));
     const azimuth  = hour * 15;
 
     return { altitude, azimuth };
@@ -153,9 +129,6 @@ function computeSunDirectionForWaypoint(wp) {
   }
 }
 
-/**
- * Apply sunlight settings to the map.
- */
 function applySunlightToWaypoint(wp) {
   const { altitude, azimuth } = computeSunDirectionForWaypoint(wp);
 
@@ -167,33 +140,32 @@ function applySunlightToWaypoint(wp) {
 }
 
 /* ============================================================
-   NATION SHADING — DIRECT MIGRATION (WITH DUPLICATE GUARDS)
+   NATION SHADING — SAFE / IDEMPOTENT
    ============================================================ */
 
 /**
  * Adds a polygon fill + outline for one nation.
- * Safe against multiple calls and duplicate IDs.
+ * Now idempotent: if the source or layers already exist, it logs a
+ * warning and returns instead of throwing.
  */
 async function addNation(id, url, color, opacity) {
   try {
-    // HARD CHECK: prevent duplicate sources across any re-init
+    // HARD CHECK: prevent duplicate sources
     if (map.getSource(id)) {
-      console.warn(
-        `Nation source '${id}' already exists – skipping addNation('${id}')`
-      );
+      console.warn(`⚠️ Nation source "${id}" already exists – skipping addNation()`);
       return;
     }
 
     const res = await fetch(url);
     const geo = await res.json();
 
-    // Add source safely
     map.addSource(id, { type: "geojson", data: geo });
 
     // Fill layer (safe)
-    if (!map.getLayer(id + "-fill")) {
+    const fillId = id + "-fill";
+    if (!map.getLayer(fillId)) {
       map.addLayer({
-        id: id + "-fill",
+        id: fillId,
         type: "fill",
         source: id,
         paint: {
@@ -204,9 +176,10 @@ async function addNation(id, url, color, opacity) {
     }
 
     // Outline layer (safe)
-    if (!map.getLayer(id + "-outline")) {
+    const outlineId = id + "-outline";
+    if (!map.getLayer(outlineId)) {
       map.addLayer({
-        id: id + "-outline",
+        id: outlineId,
         type: "line",
         source: id,
         paint: {
@@ -216,25 +189,25 @@ async function addNation(id, url, color, opacity) {
       });
     }
   } catch (err) {
-    console.error("Nation load error:", err);
+    console.error("Nation load error (id=" + id + "):", err);
   }
 }
 
 /* ============================================================
    STYLE INITIALIZATION ENTRYPOINT
-   Called from map.on("load") in core/logic modules
+   Called from map-core.js AFTER map.on("load")
    ============================================================ */
 
-let __nationsLoaded = false;
+let nationsInitialized = false;
 
 async function initializeStyleLayers() {
-  // Ensure we only ever add nation layers once,
-  // even if multiple modules call initializeStyleLayers()
-  if (__nationsLoaded) return;
-  __nationsLoaded = true;
+  // Make this safe to call multiple times
+  if (nationsInitialized) {
+    return;
+  }
+  nationsInitialized = true;
 
-  // Fog is already applied on style.load
-  // Terrain optional — enable later if you want it
+  // Optional terrain:
   // enableTerrain();
 
   await addNation(
@@ -260,11 +233,12 @@ async function initializeStyleLayers() {
 }
 
 /* ============================================================
-   EXPOSE MAP OBJECT GLOBALLY
+   EXPORTS
    ============================================================ */
 
-window.__MAP = map; // core / UI modules use this
+window.__MAP = map; // main map reference
 window.enable3DBuildings = enable3DBuildings;
 window.applySunlightToWaypoint = applySunlightToWaypoint;
 window.initializeStyleLayers = initializeStyleLayers;
 
+console.log("map-style.js fully loaded");
