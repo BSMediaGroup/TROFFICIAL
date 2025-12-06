@@ -1,25 +1,11 @@
 /* ==========================================================================
-   MAP CORE ORCHESTRATOR — extracted from original monolith
-   This file ensures all modules load in correct order.
-   NOTHING ELSE SHOULD INITIALIZE THE MAP.
+   MAP CORE ORCHESTRATOR — FIXED & STABLE
    ========================================================================== */
 
 console.log("%cmap-core.js loaded", "color:#00d0ff; font-weight:bold;");
 
 /* ==========================================================================
-   LOAD ORDER GUARANTEE
-   --------------------------------------------------------------------------
-   - map-config.js   → defines MAPBOX_TOKEN, DEFAULT_CENTER, DEFAULT_ZOOM etc.
-   - map-style.js    → defines window.__MAP style instance + fog/stars system
-   - map-data.js     → defines WAYPOINTS, TRIP_ORDER, etc.
-   - map-logic.js    → defines animation, orbit, journey functions
-   - map-ui.js       → defines markers, popups, HUD, sidebar
-   - map-core.js     → orchestrates everything in the correct sequence
-   ========================================================================== */
-
-
-/* ==========================================================================
-   SAFETY CHECKS — ensure essential globals exist
+   REQUIRED GLOBALS — BUT DO NOT CHECK __MAP HERE
    ========================================================================== */
 
 function requireGlobal(name) {
@@ -30,7 +16,6 @@ function requireGlobal(name) {
 }
 
 [
-    "__MAP",
     "WAYPOINTS",
     "TRIP_ORDER",
     "buildMarkers",
@@ -38,53 +23,89 @@ function requireGlobal(name) {
     "initializeStyleLayers"
 ].forEach(requireGlobal);
 
-
 /* ==========================================================================
-   ENFORCE CORRECT INITIALIZATION
+   WAIT FOR MAP INSTANCE (CREATED IN map-style.js)
    ========================================================================== */
 
-window.__MAP.once("load", () => {
-    console.log("%cmap-core.js: Map load event fired", "color:#00ffaa;");
+function waitForMap() {
+    return new Promise(resolve => {
+        if (window.__MAP) {
+            resolve(window.__MAP);
+            return;
+        }
 
-    /* ----------------------------------------------------------
-       1) INITIALIZE TERRAIN / FOG / NATION SHADING
-       ---------------------------------------------------------- */
-    if (typeof initializeStyleLayers === "function") {
-        initializeStyleLayers();
-    }
-
-    /* ----------------------------------------------------------
-       2) BUILD MARKERS
-       ---------------------------------------------------------- */
-    if (typeof buildMarkers === "function") {
-        buildMarkers();
-        console.log("✓ Markers built");
-    }
-
-    /* ----------------------------------------------------------
-       3) INITIAL HUD STATE
-       ---------------------------------------------------------- */
-    if (typeof updateHUD === "function") {
-        updateHUD();
-        console.log("✓ HUD initialized");
-    }
-
-    /* ----------------------------------------------------------
-       4) BIND ALL UI BUTTONS (Journey Start / HUD buttons / Legend)
-       ---------------------------------------------------------- */
-    bindGlobalUI();
-});
-
+        const check = setInterval(() => {
+            if (window.__MAP) {
+                clearInterval(check);
+                resolve(window.__MAP);
+            }
+        }, 10);
+    });
+}
 
 /* ==========================================================================
-   UI BUTTON REGISTRATION — matches the original monolith exactly
+   MAIN ORCHESTRATION
+   ========================================================================== */
+
+waitForMap().then(map => {
+
+    console.log("%cmap-core.js: Map instance detected", "color:#00ffaa;");
+
+    map.once("load", async () => {
+
+        console.log("%cmap-core.js: Map load event fired", "color:#00ffaa;");
+
+        /* ----------------------------------------------------------
+           1) STYLE LAYERS (fog, stars, nations)
+           ---------------------------------------------------------- */
+        try {
+            await initializeStyleLayers();
+        } catch (e) {
+            console.error("initializeStyleLayers() error:", e);
+        }
+
+        /* ----------------------------------------------------------
+           2) BUILD MARKERS
+           ---------------------------------------------------------- */
+        try {
+            buildMarkers();
+            console.log("✓ Markers built");
+        } catch (e) {
+            console.error("Marker build error:", e);
+        }
+
+        /* ----------------------------------------------------------
+           3) INITIAL HUD
+           ---------------------------------------------------------- */
+        try {
+            updateHUD();
+            console.log("✓ HUD initialized");
+        } catch (e) {
+            console.error("HUD init error:", e);
+        }
+
+        /* ----------------------------------------------------------
+           4) GLOBAL UI BINDINGS
+           ---------------------------------------------------------- */
+        try {
+            bindGlobalUI();
+        } catch (e) {
+            console.error("UI bind error:", e);
+        }
+
+        console.log("%cmap-core.js orchestration complete", "color:#00eaff;");
+    });
+});
+
+/* ==========================================================================
+   GLOBAL UI BINDINGS — unchanged except stabilized
    ========================================================================== */
 
 function bindGlobalUI() {
 
     console.log("✓ Binding global UI...");
 
-    /* ------------------ Journey Start Button ------------------ */
+    /* Journey Start Button */
     const startBtn = document.getElementById("startJourneyBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
@@ -95,7 +116,7 @@ function bindGlobalUI() {
         });
     }
 
-    /* ------------------ Legend Collapse ------------------ */
+    /* Legend Toggle */
     const legendToggle = document.getElementById("legendToggle");
     const legendBox = document.getElementById("legendBox");
     if (legendToggle && legendBox) {
@@ -104,7 +125,7 @@ function bindGlobalUI() {
         });
     }
 
-    /* ------------------ Top HUD Buttons ------------------ */
+    /* HUD Prev/Next */
     const hudPrev = document.getElementById("hudPrev");
     const hudNext = document.getElementById("hudNext");
 
@@ -122,7 +143,7 @@ function bindGlobalUI() {
         });
     }
 
-    /* ------------------ ESC Key closes sidebar ------------------ */
+    /* Escape closes Details Panel */
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             if (typeof closeDetailsSidebar === "function") {
@@ -133,10 +154,5 @@ function bindGlobalUI() {
 
     console.log("✓ Global UI fully bound");
 }
-
-
-/* ==========================================================================
-   SANITY LOG
-   ========================================================================== */
 
 console.log("%cmap-core.js fully loaded", "color:#00eaff; font-weight:bold;");
