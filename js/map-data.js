@@ -1,19 +1,71 @@
-/* ============================================================
-   MAP DATA MODULE — v2
-   Contains:
-   - WAYPOINTS array (full structured waypoint dataset)
-   - Any static metadata tied to the route
-   - Future extension hooks for external/Wix CMS loading
-   ============================================================ */
+/* ========================================================================== */
+/* =============================== MAP DATA ================================= */
+/* ========================================================================== */
 
-console.log("map-data.js loaded");
+console.log("%cmap-data.js loaded", "color:#00aaff;font-weight:bold;");
 
-/* ============================================================
-   WAYPOINTS ARRAY
-   (Direct, unchanged migration from your original code)
-   ============================================================ */
+/* ==========================================================================
+   FLAG ICON SOURCES — using your provided working SVGs (fallbacks)
+   ========================================================================== */
 
-window.WAYPOINTS = [
+const FLAG_AU = "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/AU.svg";
+const FLAG_CA = "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/CA.svg";
+const FLAG_US = "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/USA.svg";
+
+/* ==========================================================================
+   MARKER ICON SOURCES — these paths MATCH the original working v1 map
+   ========================================================================== */
+
+const ICON_DEPARTURE = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg";
+const ICON_FINAL     = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg";
+const ICON_MAJOR     = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg";
+const ICON_MINOR     = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg";
+const ICON_CANPIN    = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg";
+
+/* ==========================================================================
+   WAYPOINT IMAGE SOURCES — restored to EXACT file names used in the original
+   ========================================================================== */
+
+const IMG_SYDNEY    = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/sydney1.webp";
+const IMG_LA        = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/la.webp";
+const IMG_TORONTO   = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/toronto.webp";
+const IMG_NIAGARA   = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/niagara.webp";
+const IMG_BUFFALO   = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/buffalo.webp";
+const IMG_NYC       = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/nyc.webp";
+const IMG_HOBOKEN   = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/hoboken.webp";
+const IMG_TOMSRIVER = "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/tomsriver.webp";
+
+/* ==========================================================================
+   TRIP ORDER — currently identical to original version
+   ========================================================================== */
+
+const TRIP_ORDER = [
+  "sydney",
+  "la",
+  "toronto",
+  "niagara",
+  "buffalo",
+  "nyc",
+  "hoboken",
+  "tomsriver"
+];
+
+const DRIVE_ORDER = [
+  "toronto",
+  "niagara",
+  "buffalo",
+  "nyc",
+  "hoboken",
+  "tomsriver"
+];
+
+/* ==========================================================================
+   WAYPOINT DEFINITIONS — COMPLETE, UPDATED, FIXED
+   ========================================================================== */
+
+const WAYPOINTS = [
+
+  /* =========================== SYDNEY ============================ */
   {
     id: "sydney",
     role: "departure",
@@ -21,7 +73,6 @@ window.WAYPOINTS = [
     coords: [151.177222, -33.946111],
 
     location: "Sydney Kingsford Smith Airport (SYD)",
-
     names: {
       display: "Departure – Sydney",
       basic: "Sydney, NSW",
@@ -32,63 +83,47 @@ window.WAYPOINTS = [
 
     description: "Starting point of the North America trip, departing from Sydney.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/sydney1.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Sydney+NSW",
-      toilets: "https://www.google.com/maps/search/public+toilets/Sydney+NSW",
-      hotels:  "https://www.google.com/maps/search/hotels/Sydney+NSW"
-    },
+    icon: ICON_DEPARTURE,
+    image: IMG_SYDNEY,
 
     meta: {
       countryCode: "AU",
+      flag: FLAG_AU,
       timezone: "Australia/Sydney",
-      locale: "en-AU",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/AU.png"
+      locale: "en-AU"
     }
   },
 
-  /* =====================================================
-     ADDITIONAL WAYPOINTS
-     These are brought across EXACTLY as originally defined.
-     ===================================================== */
-
+  /* =========================== LOS ANGELES ============================ */
   {
     id: "la",
-    role: "arrival",
+    role: "major",
     mode: "Plane",
     coords: [-118.4085, 33.9416],
 
     location: "Los Angeles International Airport (LAX)",
-
     names: {
       display: "Arrival – Los Angeles",
       basic: "Los Angeles, CA",
       city: "Los Angeles",
-      state: "CA",
+      state: "California",
       country: "United States"
     },
 
-    description: "The first landing point in North America before connecting to Toronto.",
+    description: "First U.S. arrival point before continuing the flight to Toronto.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/la.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Los+Angeles+CA",
-      toilets: "https://www.google.com/maps/search/public+toilets/Los+Angeles+CA",
-      hotels:  "https://www.google.com/maps/search/hotels/Los+Angeles+CA"
-    },
+    icon: ICON_MAJOR,
+    image: IMG_LA,
 
     meta: {
       countryCode: "US",
+      flag: FLAG_US,
       timezone: "America/Los_Angeles",
-      locale: "en-US",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/US.png"
+      locale: "en-US"
     }
   },
 
+  /* =========================== TORONTO ============================ */
   {
     id: "toronto",
     role: "arrival",
@@ -96,220 +131,176 @@ window.WAYPOINTS = [
     coords: [-79.6306, 43.6777],
 
     location: "Toronto Pearson International Airport (YYZ)",
-
     names: {
       display: "Arrival – Toronto",
       basic: "Toronto, ON",
       city: "Toronto",
-      state: "ON",
+      state: "Ontario",
       country: "Canada"
     },
 
     description: "Primary Canadian arrival point before starting the cross-border road journey.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/toronto.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Toronto+ON",
-      toilets: "https://www.google.com/maps/search/public+toilets/Toronto+ON",
-      hotels:  "https://www.google.com/maps/search/hotels/Toronto+ON"
-    },
+    icon: ICON_CANPIN,
+    image: IMG_TORONTO,
 
     meta: {
       countryCode: "CA",
+      flag: FLAG_CA,
       timezone: "America/Toronto",
-      locale: "en-CA",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/CA.png"
+      locale: "en-CA"
     }
   },
 
-  /* =====================================================
-     FULL ROAD TRIP WAYPOINTS
-     ===================================================== */
-
+  /* =========================== NIAGARA FALLS ============================ */
   {
     id: "niagara",
-    role: "minor",
-    mode: "Drive",
-    coords: [-79.0849, 43.0896],
+    role: "major",
+    mode: "Car",
+    coords: [-79.0740, 43.0896],
 
     location: "Niagara Falls, Ontario",
-
     names: {
       display: "Niagara Falls",
-      basic: "Niagara Falls, ON",
+      basic: "Niagara Falls",
       city: "Niagara Falls",
-      state: "ON",
+      state: "Ontario",
       country: "Canada"
     },
 
-    description: "Famous waterfall landmark on the border between Canada and the United States.",
+    description: "First major stop in the road trip leaving Toronto heading toward the U.S. border.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/minor.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/niagara.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Niagara+Falls+ON",
-      toilets: "https://www.google.com/maps/search/public+toilets/Niagara+Falls+ON",
-      hotels:  "https://www.google.com/maps/search/hotels/Niagara+Falls+ON"
-    },
+    icon: ICON_MAJOR,
+    image: IMG_NIAGARA,
 
     meta: {
       countryCode: "CA",
+      flag: FLAG_CA,
       timezone: "America/Toronto",
-      locale: "en-CA",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/CA.png"
+      locale: "en-CA"
     }
   },
 
+  /* =========================== BUFFALO ============================ */
   {
-    id: "cleveland",
-    role: "minor",
-    mode: "Drive",
-    coords: [-81.6944, 41.4993],
+    id: "buffalo",
+    role: "major",
+    mode: "Car",
+    coords: [-78.8784, 42.8864],
 
-    location: "Cleveland, Ohio",
-
+    location: "Buffalo, New York",
     names: {
-      display: "Cleveland",
-      basic: "Cleveland, OH",
-      city: "Cleveland",
-      state: "OH",
+      display: "Buffalo",
+      basic: "Buffalo",
+      city: "Buffalo",
+      state: "New York",
       country: "United States"
     },
 
-    description: "A major city on the shores of Lake Erie, known for the Rock & Roll Hall of Fame.",
+    description: "First U.S. stop after crossing the border from Canada.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/minor.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/cleveland.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Cleveland+OH",
-      toilets: "https://www.google.com/maps/search/public+toilets/Cleveland+OH",
-      hotels:  "https://www.google.com/maps/search/hotels/Cleveland+OH"
-    },
+    icon: ICON_MAJOR,
+    image: IMG_BUFFALO,
 
     meta: {
       countryCode: "US",
+      flag: FLAG_US,
       timezone: "America/New_York",
-      locale: "en-US",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/US.png"
+      locale: "en-US"
     }
   },
 
+  /* =========================== NEW YORK CITY ============================ */
   {
-    id: "pittsburgh",
-    role: "minor",
-    mode: "Drive",
-    coords: [-79.9959, 40.4406],
+    id: "nyc",
+    role: "major",
+    mode: "Car",
+    coords: [-73.9857, 40.7484],
 
-    location: "Pittsburgh, Pennsylvania",
-
+    location: "New York City, NY",
     names: {
-      display: "Pittsburgh",
-      basic: "Pittsburgh, PA",
-      city: "Pittsburgh",
-      state: "PA",
+      display: "New York City",
+      basic: "NYC",
+      city: "New York",
+      state: "New York",
       country: "United States"
     },
 
-    description: "Known for its steel industry history and famous sports teams.",
+    description: "Major waypoint on the journey through New York City.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/minor.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/pittsburgh.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Pittsburgh+PA",
-      toilets: "https://www.google.com/maps/search/public+toilets/Pittsburgh+PA",
-      hotels:  "https://www.google.com/maps/search/hotels/Pittsburgh+PA"
-    },
+    icon: ICON_MAJOR,
+    image: IMG_NYC,
 
     meta: {
       countryCode: "US",
+      flag: FLAG_US,
       timezone: "America/New_York",
-      locale: "en-US",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/US.png"
+      locale: "en-US"
     }
   },
 
+  /* =========================== HOBOKEN ============================ */
   {
-    id: "philadelphia",
+    id: "hoboken",
     role: "minor",
-    mode: "Drive",
-    coords: [-75.1652, 39.9526],
+    mode: "Car",
+    coords: [-74.0324, 40.7433],
 
-    location: "Philadelphia, Pennsylvania",
-
+    location: "Hoboken, NJ",
     names: {
-      display: "Philadelphia",
-      basic: "Philadelphia, PA",
-      city: "Philadelphia",
-      state: "PA",
+      display: "Hoboken",
+      basic: "Hoboken",
+      city: "Hoboken",
+      state: "New Jersey",
       country: "United States"
     },
 
-    description: "Historic American city and home of the Liberty Bell and Independence Hall.",
+    description: "Passing through Hoboken on the way to Toms River.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/minor.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/philadelphia.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Philadelphia+PA",
-      toilets: "https://www.google.com/maps/search/public+toilets/Philadelphia+PA",
-      hotels:  "https://www.google.com/maps/search/hotels/Philadelphia+PA"
-    },
+    icon: ICON_MINOR,
+    image: IMG_HOBOKEN,
 
     meta: {
       countryCode: "US",
+      flag: FLAG_US,
       timezone: "America/New_York",
-      locale: "en-US",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/US.png"
+      locale: "en-US"
     }
   },
 
+  /* =========================== TOMS RIVER ============================ */
   {
     id: "tomsriver",
-    role: "arrival",
-    mode: "Drive",
-    coords: [-74.1979, 39.9537],
+    role: "final",
+    mode: "Car",
+    coords: [-74.2000, 39.9537],
 
     location: "Toms River, New Jersey",
-
     names: {
-      display: "Toms River",
-      basic: "Toms River, NJ",
+      display: "Final Destination – Toms River",
+      basic: "Toms River",
       city: "Toms River",
-      state: "NJ",
+      state: "New Jersey",
       country: "United States"
     },
 
-    description: "Final destination of the cross-country trip.",
+    description: "Final stop of the North America trip completing the journey.",
 
-    icon: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg",
-    image: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/tomsriver.webp",
-
-    links: {
-      search:  "https://www.google.com/maps/search/tourist+places/Toms+River+NJ",
-      toilets: "https://www.google.com/maps/search/public+toilets/Toms+River+NJ",
-      hotels:  "https://www.google.com/maps/search/hotels/Toms+River+NJ"
-    },
+    icon: ICON_FINAL,
+    image: IMG_TOMSRIVER,
 
     meta: {
       countryCode: "US",
+      flag: FLAG_US,
       timezone: "America/New_York",
-      locale: "en-US",
-      flag: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/FLAGS/US.png"
+      locale: "en-US"
     }
   }
+
 ];
 
-/* ============================================================
-   EXPORT MODULE
-   ============================================================ */
+/* ==========================================================================
+   EXPORT
+   ========================================================================== */
 
-window.DATA = {
-  WAYPOINTS
-};
-
-console.log("%cmap-data.js fully loaded", "color:#00e5ff;font-weight:bold;");
+console.log("%cmap-data.js fully loaded", "color:#00ff88;font-weight:bold;");
