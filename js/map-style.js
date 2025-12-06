@@ -1,47 +1,180 @@
 /* ======================================================================= */
-/* ============================= MAP STYLE ================================ */
+/* =========================== MAP STYLE MODULE ========================== */
 /* ======================================================================= */
 
 console.log("map-style.js loaded");
 
+/*
+   IMPORTANT:
+   - This is the ONLY place the Mapbox map is constructed.
+   - Other modules (logic, UI, core) use window.__MAP.
+*/
+
 /* ======================================================================= */
-/* ===================== FOG + STARFIELD (STATIC) ======================== */
+/* ========================= MAP INITIALIZATION ========================== */
 /* ======================================================================= */
 
-const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
-const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";
+/* Access token MUST be set before this file:
+   e.g. in your HTML:
+
+   <script>
+     mapboxgl.accessToken = "pk.XXXXXXXXXXXX";
+   </script>
+*/
+
+window.__MAP = new mapboxgl.Map({
+  container: "map",
+  style: "mapbox://styles/mapbox/dark-v11",
+  center: DEFAULT_CENTER,
+  zoom: DEFAULT_ZOOM,
+  pitch: 0,
+  renderWorldCopies: false,
+  projection: "globe"
+});
+
+window.__MAP.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
+
+
+/* ======================================================================= */
+/* ===================== GLOBE ATMOSPHERE & STARS ======================== */
+/* ======================================================================= */
+
+const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";      // darker, closer to space
+const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";  // subtle blue edge glow
 const FOG_HORIZON_BLEND  = 0.45;
 const FOG_SPACE_COLOR    = "#02040A";
-const FOG_STAR_INTENSITY = 0.65;
+const FOG_STAR_INTENSITY = 0.65;                        // static brightness
+
+window.__MAP.on("style.load", () => {
+  window.__MAP.setFog({
+    color: FOG_COLOR,
+    "high-color": FOG_HIGH_COLOR,
+    "horizon-blend": FOG_HORIZON_BLEND,
+    "space-color": FOG_SPACE_COLOR,
+    "star-intensity": FOG_STAR_INTENSITY
+  });
+});
+
 
 /* ======================================================================= */
-/* =========================== NATION SHADING ============================ */
+/* ======================= TERRAIN (OPTIONAL STUB) ======================= */
+/* ======================================================================= */
+
+function enableTerrain() {
+  // If you want DEM terrain later, add the DEM source here and call setTerrain.
+  // Left as a stub so we don't introduce any new behaviour yet.
+  // window.__MAP.addSource("mapbox-dem", { ... });
+  // window.__MAP.setTerrain({ source: "mapbox-dem", exaggeration: 1.0 });
+}
+
+
+/* ======================================================================= */
+/* ========================== 3D BUILDINGS TOGGLE ======================== */
+/* ======================================================================= */
+
+let buildingsEnabled = false;
+
+function enable3DBuildings() {
+  if (buildingsEnabled) return;
+  buildingsEnabled = true;
+
+  const style = window.__MAP.getStyle();
+  if (!style || !style.layers) return;
+
+  let labelLayerId = null;
+  for (const layer of style.layers) {
+    if (layer.type === "symbol" && layer.layout && layer.layout["text-field"]) {
+      labelLayerId = layer.id;
+      break;
+    }
+  }
+
+  window.__MAP.addLayer(
+    {
+      id: "3d-buildings",
+      source: "composite",
+      "source-layer": "building",
+      type: "fill-extrusion",
+      minzoom: 14,
+      paint: {
+        "fill-extrusion-color": "#aaa",
+        "fill-extrusion-height": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          14, 0,
+          15, ["get", "height"]
+        ],
+        "fill-extrusion-base": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          14, 0,
+          15, ["get", "min_height"]
+        ],
+        "fill-extrusion-opacity": 0.6
+      }
+    },
+    labelLayerId
+  );
+}
+
+
+/* ======================================================================= */
+/* ======================== SUNLIGHT (SIMPLE STUB) ======================= */
+/* ======================================================================= */
+
+function computeSunDirectionForWaypoint(wp) {
+  try {
+    const now = new Date();
+    const tz = wp.meta?.timezone;
+
+    const hour = Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        hour: "numeric",
+        hour12: false
+      }).format(now)
+    );
+
+    const altitude = Math.max(5, Math.min(60, (hour - 6) * 10)); // very crude
+    const azimuth  = hour * 15;
+
+    return { altitude, azimuth };
+  } catch {
+    return { altitude: 45, azimuth: 180 };
+  }
+}
+
+function applySunlightToWaypoint(wp) {
+  const { altitude, azimuth } = computeSunDirectionForWaypoint(wp);
+
+  window.__MAP.setLight({
+    anchor: "viewport",
+    position: [azimuth, altitude],
+    intensity: 0.6
+  });
+}
+
+
+/* ======================================================================= */
+/* ========================== NATION SHADING ============================= */
 /* ======================================================================= */
 
 async function addNation(id, url, color, opacity) {
-  const map = window.__MAP;
-  if (!map) {
-    console.error(`map-style.js: ❌ window.__MAP missing when adding nation "${id}"`);
-    return;
-  }
-
   try {
-    // Safety: don't re-add if the source already exists
-    if (map.getSource(id)) {
-      console.warn(`map-style.js: Skipped duplicate source '${id}'`);
-      return;
-    }
-
     const res = await fetch(url);
     const geo = await res.json();
 
-    map.addSource(id, {
-      type: "geojson",
-      data: geo
-    });
+    if (window.__MAP.getSource(id)) {
+      // Avoid "There is already a source with ID" errors
+      return;
+    }
 
-    map.addLayer({
-      id: `${id}-fill`,
+    window.__MAP.addSource(id, { type: "geojson", data: geo });
+
+    window.__MAP.addLayer({
+      id: id + "-fill",
       type: "fill",
       source: id,
       paint: {
@@ -50,8 +183,8 @@ async function addNation(id, url, color, opacity) {
       }
     });
 
-    map.addLayer({
-      id: `${id}-outline`,
+    window.__MAP.addLayer({
+      id: id + "-outline",
       type: "line",
       source: id,
       paint: {
@@ -65,29 +198,11 @@ async function addNation(id, url, color, opacity) {
   }
 }
 
-/* ======================================================================= */
-/* ========== SINGLE ENTRY POINT CALLED BY map-core.js ON LOAD =========== */
-/* ======================================================================= */
+async function initializeStyleLayers() {
+  // Terrain left disabled by default
+  // enableTerrain();
 
-window.initializeStyleLayers = async function () {
-  const map = window.__MAP;
-  if (!map) {
-    console.error("map-style.js: ❌ window.__MAP is missing inside initializeStyleLayers()");
-    return;
-  }
-
-  console.log("map-style.js: initializeStyleLayers()");
-
-  // 1) Fog + starfield on the current style
-  map.setFog({
-    color: FOG_COLOR,
-    "high-color": FOG_HIGH_COLOR,
-    "horizon-blend": FOG_HORIZON_BLEND,
-    "space-color": FOG_SPACE_COLOR,
-    "star-intensity": FOG_STAR_INTENSITY
-  });
-
-  // 2) Nation shading – AU, CA, USA
+  // National shading – same three countries as original
   await addNation(
     "aus",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
@@ -108,6 +223,15 @@ window.initializeStyleLayers = async function () {
     "#FFFFFF",
     0.12
   );
-};
+}
 
-console.log("map-style.js fully loaded");
+
+/* ======================================================================= */
+/* ======================= EXPORTS TO GLOBAL SCOPE ======================= */
+/* ======================================================================= */
+
+window.enable3DBuildings       = enable3DBuildings;
+window.applySunlightToWaypoint = applySunlightToWaypoint;
+window.initializeStyleLayers   = initializeStyleLayers;
+
+console.log("%cmap-style.js fully loaded", "color:#00e5ff;font-weight:bold;");
