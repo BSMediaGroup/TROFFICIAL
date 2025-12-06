@@ -1,13 +1,12 @@
 /* ==========================================================================
-   MAP CORE ORCHESTRATOR — v2 (HARD LOAD ORDER SAFE)
+   MAP CORE ORCHESTRATOR — v2 (FINAL, MONOLITH-ACCURATE, SAFE)
    ========================================================================== */
 
 console.log("%cmap-core.js loaded", "color:#00d0ff; font-weight:bold;");
 
 /* --------------------------------------------------------------------------
-   HARD BLOCKER:
-   Do NOT run ANYTHING until map-style.js has created window.__MAP.
-   -------------------------------------------------------------------------- */
+   DO NOT RUN ANYTHING UNTIL map-style.js has created window.__MAP.
+-------------------------------------------------------------------------- */
 
 function waitForMap(callback) {
     if (window.__MAP) {
@@ -19,74 +18,79 @@ function waitForMap(callback) {
 }
 
 /* ==========================================================================
-   MAIN INITIALIZATION GATE
+   MAIN INITIALIZATION
    ========================================================================== */
 
 waitForMap(() => {
+    const map = window.__MAP;
+
     console.log("%cmap-core.js: __MAP detected", "color:#00ffaa;");
 
-    /* Sanity checks */
-    [
+    /* ----------------------------------------------------------------------
+       Ensure globals from map-data.js, map-style.js, map-logic.js, map-ui.js exist
+       ---------------------------------------------------------------------- */
+    const required = [
         "WAYPOINTS",
         "TRIP_ORDER",
         "initializeStyleLayers",
+        "initDistances",
+        "addStaticRoutes",
+        "buildDrivingRoute",
+        "addJourneySources",
         "buildMarkers",
         "updateHUD",
-        "bindGlobalUI"
-    ].forEach(name => {
+        "spinGlobe"
+    ];
+
+    required.forEach(name => {
         if (typeof window[name] === "undefined") {
             console.error(`❌ map-core: Missing global ${name}`);
             throw new Error(`Missing global: ${name}`);
         }
     });
 
-    /* Wait for map load */
-    window.__MAP.once("load", () => {
-        console.log("%cmap-core: Map load event fired", "color:#00ffaa;");
+    /* ----------------------------------------------------------------------
+       SINGLE map.load ENTRY POINT — EXACTLY ONE
+       ---------------------------------------------------------------------- */
+    map.once("load", async () => {
+        console.log("%cmap-core: map.load fired", "color:#00ffaa;");
 
-        initializeStyleLayers();
+        /* 1) STYLE INITIALIZATION (FOG handled in style.load) */
+        await initializeStyleLayers();
+        console.log("✓ Style layers initialized");
+
+        /* 2) DISTANCES (required BEFORE popups / HUD) */
+        initDistances();
+        console.log("✓ Distances initialized");
+
+        /* 3) STATIC ROUTES */
+        addStaticRoutes();
+        console.log("✓ Static flight routes added");
+
+        /* 4) DRIVING ROUTE */
+        await buildDrivingRoute();
+        console.log("✓ Driving route built");
+
+        /* 5) JOURNEY LINE SOURCES */
+        addJourneySources();
+        console.log("✓ Journey polyline sources added");
+
+        /* 6) MARKERS */
         buildMarkers();
-        updateHUD();
-        bindGlobalUI();
+        console.log("✓ Markers built");
 
+        /* 7) INITIAL HUD */
+        updateHUD();
+        console.log("✓ HUD initialized");
+
+        /* 8) ENABLE SPIN */
+        spinGlobe();
+        console.log("✓ Globe spin started");
+
+        /* 9) MAP READY FLAG */
         window.MAP_READY = true;
         console.log("%c✓ MAP SYSTEM READY", "color:#00ffcc; font-weight:bold;");
     });
 });
-
-console.log("%cmap-core.js fully loaded", "color:#00eaff; font-weight:bold;");
-
-
-/* ==========================================================================
-   MAIN BOOTSTRAP — map load event
-   ========================================================================== */
-
-window.__MAP.once("load", () => {
-    console.log("%cmap-core: Map load event fired", "color:#00ffaa;");
-
-    /* --- 1) STYLE INITIALIZATION (FOG, STARFIELD, NATION SHADING) --- */
-    initializeStyleLayers();
-    console.log("✓ Style layers initialized");
-
-    /* --- 2) MARKERS --- */
-    buildMarkers();
-    console.log("✓ Markers built");
-
-    /* --- 3) INITIAL HUD --- */
-    updateHUD();
-    console.log("✓ HUD initialized");
-
-    /* --- 4) GLOBAL UI CONTROLS (journey buttons, legend toggle, etc.) --- */
-    bindGlobalUI();
-    console.log("✓ Global UI bound");
-
-    /* --- 5) Application is now ready --- */
-    window.MAP_READY = true;
-    console.log("%c✓ MAP SYSTEM READY", "color:#00ffcc; font-weight:bold;");
-});
-
-/* ==========================================================================
-   END
-   ========================================================================== */
 
 console.log("%cmap-core.js fully loaded", "color:#00eaff; font-weight:bold;");
