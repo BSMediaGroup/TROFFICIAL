@@ -4,45 +4,62 @@
 
 console.log("%cmap-logic.js loaded", "color:#ffaa00;font-weight:bold;");
 
-/* ==========================================================================
-   GLOBAL STATE (NO REDECLARATIONS — SAFE WITH map-ui.js)
-   ========================================================================== */
+/* 
+   This module ONLY:
+   - Creates the Mapbox map
+   - Provides orbit, journey, and camera-animation logic
+   - Exposes functions required by map-ui.js and map-core.js
 
-window.currentID   = null;
+   It DOES NOT:
+   - Build markers
+   - Build popups
+   - Attach UI listeners
+   - Initialize style layers
+   - Read map load events directly
+*/
+
+/* ========================================================================== */
+/* GLOBAL STATE — SHARED ACROSS MODULES                                       */
+/* ========================================================================== */
+
+window.__MAP = null;
+window.currentID = null;
 window.journeyMode = false;
 
-window.__MAP = window.__MAP || null;
-
 /* Orbit animation state */
-let orbitInterval        = null;
-const ORBIT_SPEED        = 0.08;
-const ORBIT_ZOOM_TARGET  = 6.5;
-const ORBIT_PITCH_TARGET = 60;
+let orbitInterval = null;
 
 /* Distance accumulation */
-window.TRAVELLED_MI = window.TRAVELLED_MI || {};
-window.TRAVELLED_KM = window.TRAVELLED_KM || {};
-window.LEG_DIST     = window.LEG_DIST     || {};
+window.TRAVELLED_MI = {};
+window.TRAVELLED_KM = {};
+window.LEG_DIST = {};
 
-/* ==========================================================================
-   GET WAYPOINT OBJECT
-   ========================================================================== */
+/* Guard to prevent animations before ready */
+window.MAP_READY = false;
+
+
+/* ========================================================================== */
+/* WAYPOINT LOOKUP                                                            */
+/* ========================================================================== */
+
 window.getWP = function (id) {
   return WAYPOINTS.find(w => w.id === id);
 };
 
-/* ==========================================================================
-   ZOOM LOGIC
-   ========================================================================== */
+
+/* ========================================================================== */
+/* ZOOM LOGIC                                                                  */
+/* ========================================================================== */
 
 window.getZoom = function (id) {
   if (["sydney", "la", "toronto"].includes(id)) return 6.7;
   return 9.4;
 };
 
-/* ==========================================================================
-   FLIGHT vs DRIVING MODE DETECTION
-   ========================================================================== */
+
+/* ========================================================================== */
+/* MODE DETECTION                                                              */
+/* ========================================================================== */
 
 function isFlight(a, b) {
   return (
@@ -52,32 +69,34 @@ function isFlight(a, b) {
 }
 
 window.getLegMode = function (id) {
-  const idx  = TRIP_ORDER.indexOf(id);
+  const idx = TRIP_ORDER.indexOf(id);
   const next = TRIP_ORDER[idx + 1];
   if (next && isFlight(id, next)) return "Plane";
   return getWP(id)?.mode || "Car";
 };
 
-/* ==========================================================================
-   ORBIT CAMERA CONTROL
-   ========================================================================== */
+
+/* ========================================================================== */
+/* ORBIT CAMERA                                                                */
+/* ========================================================================== */
 
 window.startOrbit = function (id) {
-  window.stopOrbit();
+  stopOrbit();
+  if (!MAP_READY) return;
 
   const wp = getWP(id);
-  if (!wp || !window.__MAP) return;
+  if (!wp) return;
 
-  window.__MAP.easeTo({
+  __MAP.easeTo({
     center: wp.coords,
-    zoom:   ORBIT_ZOOM_TARGET,
-    pitch:  ORBIT_PITCH_TARGET,
-    duration: 900
+    zoom: ORBIT_ZOOM_TARGET,
+    pitch: ORBIT_PITCH_TARGET,
+    duration: ORBIT_ENTRY_DURATION
   });
 
   orbitInterval = setInterval(() => {
-    const b = window.__MAP.getBearing() + ORBIT_SPEED;
-    window.__MAP.setBearing(b);
+    const b = __MAP.getBearing() + ORBIT_ROTATION_SPEED;
+    __MAP.setBearing(b);
   }, 30);
 };
 
@@ -86,12 +105,13 @@ window.stopOrbit = function () {
   orbitInterval = null;
 };
 
-/* ==========================================================================
-   LEG DISTANCES (MI + KM)
-   ========================================================================== */
+
+/* ========================================================================== */
+/* DISTANCE CALCULATION                                                        */
+/* ========================================================================== */
 
 function computeDistance(a, b) {
-  const R    = 6371;
+  const R = 6371;
   const dLat = (b[1] - a[1]) * Math.PI / 180;
   const dLon = (b[0] - a[0]) * Math.PI / 180;
 
@@ -113,7 +133,6 @@ function computeAllLegDistances() {
     if (i === TRIP_ORDER.length - 1) return;
     const wpA = getWP(id);
     const wpB = getWP(TRIP_ORDER[i + 1]);
-    if (!wpA || !wpB) return;
     LEG_DIST[id] = computeDistance(wpA.coords, wpB.coords);
   });
 
@@ -128,29 +147,32 @@ function computeAllLegDistances() {
   });
 }
 
-/* ==========================================================================
-   JOURNEY ANIMATION
-   ========================================================================== */
+
+/* ========================================================================== */
+/* JOURNEY ANIMATION                                                           */
+/* ========================================================================== */
 
 window.animateLeg = function (fromID, toID) {
-  window.stopOrbit();
+  if (!MAP_READY) return;
+  stopOrbit();
 
   const A = getWP(fromID);
   const B = getWP(toID);
-  if (!A || !B || !window.__MAP) return;
 
-  const mode     = getLegMode(fromID);
+  const mode = getLegMode(fromID);
   const duration = mode === "Plane" ? 5000 : 3500;
 
   const start = performance.now();
 
   function frame(t) {
+    if (!journeyMode) return; // HARD STOP if user exits journey
+
     const p = Math.min((t - start) / duration, 1);
 
     const lng = A.coords[0] + (B.coords[0] - A.coords[0]) * p;
     const lat = A.coords[1] + (B.coords[1] - A.coords[1]) * p;
 
-    window.__MAP.easeTo({
+    __MAP.easeTo({
       center: [lng, lat],
       duration: 0
     });
@@ -159,115 +181,82 @@ window.animateLeg = function (fromID, toID) {
       requestAnimationFrame(frame);
     } else {
       currentID = toID;
-      if (typeof openPopupFor === "function") {
-        openPopupFor(toID);
-      }
-      if (typeof updateHUD === "function") {
-        updateHUD();
-      }
+      if (typeof openPopupFor === "function") openPopupFor(toID);
+      if (typeof updateHUD === "function") updateHUD();
     }
   }
 
   requestAnimationFrame(frame);
 };
 
-/* ==========================================================================
-   UNDO LEG
-   ========================================================================== */
+
+/* ========================================================================== */
+/* JOURNEY BACKTRACK                                                           */
+/* ========================================================================== */
 
 window.undoTo = function (targetID) {
-  window.stopOrbit();
+  if (!MAP_READY) return;
+  stopOrbit();
   currentID = targetID;
 
   const wp = getWP(targetID);
-  if (!wp || !window.__MAP) return;
-
-  window.__MAP.easeTo({
-    center:  wp.coords,
-    zoom:    getZoom(targetID),
-    pitch:   0,
+  __MAP.easeTo({
+    center: wp.coords,
+    zoom: getZoom(targetID),
+    pitch: 0,
     bearing: 0,
     duration: 800
   });
 
-  if (typeof openPopupFor === "function") {
-    openPopupFor(targetID);
-  }
-  if (typeof updateHUD === "function") {
-    updateHUD();
-  }
+  if (typeof openPopupFor === "function") openPopupFor(targetID);
+  if (typeof updateHUD === "function") updateHUD();
 };
 
-/* ==========================================================================
-   RESET JOURNEY
-   ========================================================================== */
+
+/* ========================================================================== */
+/* RESET JOURNEY                                                               */
+/* ========================================================================== */
 
 window.resetJourney = function () {
-  window.stopOrbit();
+  if (!MAP_READY) return;
+  stopOrbit();
   journeyMode = false;
-  currentID   = null;
+  currentID = null;
 
-  if (!window.__MAP || !WAYPOINTS?.length) return;
-
-  window.__MAP.easeTo({
-    center:  WAYPOINTS[0].coords,
-    zoom:    getZoom(WAYPOINTS[0].id),
-    pitch:   0,
+  __MAP.easeTo({
+    center: WAYPOINTS[0].coords,
+    zoom: getZoom(WAYPOINTS[0].id),
+    pitch: 0,
     bearing: 0,
     duration: 900
   });
 
-  if (typeof closeAllPopups === "function") {
-    closeAllPopups();
-  }
-  if (typeof updateHUD === "function") {
-    updateHUD();
-  }
+  if (typeof closeAllPopups === "function") closeAllPopups();
+  if (typeof updateHUD === "function") updateHUD();
 };
 
-/* ==========================================================================
-   MAP INITIALISATION — THE ONLY PLACE THIS FILE CREATES / CONFIGS THE MAP
-   ========================================================================== */
+
+/* ========================================================================== */
+/* MAP INITIALIZATION — ONLY PLACE MAP IS CREATED                              */
+/* ========================================================================== */
 
 window.addEventListener("DOMContentLoaded", () => {
   computeAllLegDistances();
 
-  // Safe style URL: use MAP_STYLE_URL if it exists, otherwise fall back.
-  const STYLE_URL =
-    (typeof MAP_STYLE_URL !== "undefined" && MAP_STYLE_URL) ||
-    "mapbox://styles/mapbox/dark-v11";
+  window.__MAP = new mapboxgl.Map({
+    container: "map",
+    style: MAP_STYLE_URL,
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0,
+    antialias: true
+  });
 
-  // If some other file (e.g. map-style.js) already created a map, reuse it.
-  if (!window.__MAP) {
-    window.__MAP = new mapboxgl.Map({
-      container: "map",
-      style:     STYLE_URL,
-      center:    DEFAULT_CENTER,
-      zoom:      DEFAULT_ZOOM,
-      pitch:     DEFAULT_PITCH,
-      bearing:   DEFAULT_BEARING,
-      antialias: true
-    });
-  } else {
-    // Map already exists; try to align its style with STYLE_URL
-    try {
-      window.__MAP.setStyle(STYLE_URL);
-    } catch (err) {
-      console.warn("Could not set style on existing map:", err);
-    }
-  }
+  console.log("map-logic.js: Map constructed");
 
-  window.__MAP.on("load", () => {
+  __MAP.once("load", () => {
     console.log("%cmap-logic.js fully loaded", "color:#00ff88;font-weight:bold;");
-
-    if (typeof initializeStyleLayers === "function") {
-      initializeStyleLayers();
-    }
-    if (typeof buildMarkers === "function") {
-      buildMarkers();
-    }
-    if (typeof updateHUD === "function") {
-      updateHUD();
-    }
+    MAP_READY = true;
   });
 });
