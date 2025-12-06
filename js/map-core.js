@@ -1,113 +1,95 @@
 /* ==========================================================================
-   MAP CORE ORCHESTRATOR — v3 (FINAL, MODULAR, MONOLITH-ACCURATE)
+   MAP CORE ORCHESTRATOR — v2 (FINAL, MONOLITH-ACCURATE, SAFE)
    ========================================================================== */
 
 console.log("%cmap-core.js loaded", "color:#00d0ff; font-weight:bold;");
 
-/* ==========================================================================
-   WAIT FOR MAP INSTANCE FROM map-style.js
-   (This guarantees style.load → fog config has a target)
-   ========================================================================== */
+/* --------------------------------------------------------------------------
+   DO NOT RUN ANYTHING UNTIL map-style.js has created window.__MAP.
+-------------------------------------------------------------------------- */
 
 function waitForMap(callback) {
     if (window.__MAP) {
-        callback(window.__MAP);
+        callback();
         return;
     }
-    setTimeout(() => waitForMap(callback), 20);
+    console.warn("map-core.js: __MAP not ready — waiting...");
+    setTimeout(() => waitForMap(callback), 30);
 }
 
 /* ==========================================================================
-   START WHEN MAP INSTANCE EXISTS
+   MAIN INITIALIZATION
    ========================================================================== */
 
-waitForMap((map) => {
+waitForMap(() => {
+    const map = window.__MAP;
+
     console.log("%cmap-core.js: __MAP detected", "color:#00ffaa;");
 
     /* ----------------------------------------------------------------------
-       VERIFY REQUIRED MODULE EXPORTS EXIST (REAL, CURRENT, ACCURATE)
+       Ensure globals exist before executing map.load
        ---------------------------------------------------------------------- */
+    const required = [
+        "WAYPOINTS",
+        "TRIP_ORDER",
+        "initializeStyleLayers",
+        "computeAllLegDistances",
+        "addStaticRoutes",
+        "buildDrivingRoute",
+        "addJourneySources",
+        "buildMarkers",
+        "updateHUD",
+        "spinGlobe"
+    ];
 
-    const requiredGlobals = {
-        WAYPOINTS: "map-data.js",
-        TRIP_ORDER: "map-data.js",
-        initDistances: "map-logic.js",
-        addStaticRoutes: "map-logic.js",
-        buildDrivingRoute: "map-logic.js",
-        addJourneyLayers: "map-logic.js",
-        buildMarkers: "map-ui.js",
-        updateHUD: "map-ui.js",
-        spinGlobe: "map-logic.js",
-        initializeStyleLayers: "map-style.js"
-    };
-
-    Object.entries(requiredGlobals).forEach(([name, src]) => {
+    required.forEach(name => {
         if (typeof window[name] === "undefined") {
-            console.error(`❌ map-core.js: Missing global "${name}" (from ${src})`);
+            console.error(`❌ map-core.js: Missing global "${name}"`);
             throw new Error(`Missing global ${name}`);
         }
     });
 
-    /* ==========================================================================
-       SINGLE MAP.LOAD ENTRY POINT — EXACTLY ONE
-       ========================================================================== */
+    /* ----------------------------------------------------------------------
+       SINGLE ENTRY POINT — Map LOAD EVENT
+       ---------------------------------------------------------------------- */
 
     map.once("load", async () => {
-        console.log("%cmap-core: map.load fired", "color:#00ffaa;");
+        console.log("%cmap-core.js: map.load fired", "color:#00ffaa;");
 
-        /* ----------------------------------------------------------------------
-           1) STYLE INITIALIZATION (Fog executed automatically in style.load)
-           ---------------------------------------------------------------------- */
+        /* 1) STYLE */
         await initializeStyleLayers();
         console.log("✓ Style layers initialized");
 
-        /* ----------------------------------------------------------------------
-           2) DISTANCE TABLES (crucial before popups/HUD)
-           ---------------------------------------------------------------------- */
-        initDistances();
-        console.log("✓ Distance tables built");
+        /* 2) DISTANCES */
+        computeAllLegDistances();
+        console.log("✓ Distances computed");
 
-        /* ----------------------------------------------------------------------
-           3) STATIC FLIGHT ROUTES (always shown in static mode)
-           ---------------------------------------------------------------------- */
+        /* 3) STATIC FLIGHT ROUTE */
         addStaticRoutes();
         console.log("✓ Static flight routes added");
 
-        /* ----------------------------------------------------------------------
-           4) DRIVING ROUTE (async Mapbox Directions API)
-           ---------------------------------------------------------------------- */
+        /* 4) DRIVING ROUTE (async Mapbox Directions call) */
         await buildDrivingRoute();
-        console.log("✓ Driving route generated");
+        console.log("✓ Driving route built");
 
-        /* ----------------------------------------------------------------------
-           5) JOURNEY POLYLINE SOURCES (empty containers for animation)
-           ---------------------------------------------------------------------- */
-        addJourneyLayers();
-        console.log("✓ Journey animation layers added");
+        /* 5) JOURNEY POLYLINE SOURCES */
+        addJourneySources();
+        console.log("✓ Journey sources added");
 
-        /* ----------------------------------------------------------------------
-           6) MARKERS + POPUPS
-           ---------------------------------------------------------------------- */
+        /* 6) MARKERS */
         buildMarkers();
-        console.log("✓ Markers and popups initialized");
+        console.log("✓ Markers created");
 
-        /* ----------------------------------------------------------------------
-           7) INITIAL HUD STATE
-           ---------------------------------------------------------------------- */
+        /* 7) HUD */
         updateHUD();
-        console.log("✓ HUD initialized");
+        console.log("✓ HUD ready");
 
-        /* ----------------------------------------------------------------------
-           8) INITIAL GLOBE SPIN (stops when user interacts)
-           ---------------------------------------------------------------------- */
+        /* 8) ENABLE GLOBE SPIN */
         spinGlobe();
-        console.log("✓ Globe auto-rotation started");
+        console.log("✓ Globe spinning");
 
-        /* ----------------------------------------------------------------------
-           9) MAP READY FLAG
-           ---------------------------------------------------------------------- */
+        /* 9) MAP READY FLAG */
         window.MAP_READY = true;
-
         console.log("%c✓ MAP SYSTEM READY", "color:#00ffcc; font-weight:bold;");
     });
 });
