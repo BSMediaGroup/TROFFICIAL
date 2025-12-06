@@ -1,6 +1,6 @@
 /* ============================================================
    MAP STYLE BOOTSTRAP — v2 (map-style.js)
-   * Monolith-accurate modular version *
+   * Corrected full version — no duplicated static sources *
 ============================================================ */
 
 console.log("map-style.js loaded");
@@ -31,7 +31,7 @@ window.__MAP = map;
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
 /* ============================================================
-   FOG + STARFIELD — STYLE.LOAD (MATCHES MONOLITH)
+   FOG + STARFIELD — STYLE.LOAD
 ============================================================ */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
@@ -89,58 +89,19 @@ async function addNation(id, url, color, opacity) {
 }
 
 /* ============================================================
-   JOURNEY + STATIC ROUTE SOURCES AND LAYERS
-   (REQUIRED BY map-logic.js AND UI)
-   EXACT 1:1 BEHAVIOR FROM MONOLITH
+   JOURNEY ROUTE SOURCES ONLY (NOT STATIC ROUTES)
+   Static routes now handled solely in map-logic.js
 ============================================================ */
 
 map.on("load", () => {
 
-  /* ---------------- STATIC FLIGHT ROUTE ---------------- */
-  map.addSource("flight-route", {
-    type: "geojson",
-    data: {
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: [] }
-    }
-  });
-
-  map.addLayer({
-    id: "flight-route",
-    type: "line",
-    source: "flight-route",
-    paint: {
-      "line-color": "#478ED3",
-      "line-width": 3,
-      "line-dasharray": [3, 2],
-      "line-opacity": 0.9
-    }
-  });
-
-  /* ---------------- STATIC DRIVING ROUTE ---------------- */
-  map.addSource("drive-route", {
-    type: "geojson",
-    data: {
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: [] }
-    }
-  });
-
-  map.addLayer({
-    id: "drive-route",
-    type: "line",
-    source: "drive-route",
-    paint: {
-      "line-color": "#FF9C57",
-      "line-width": 4,
-      "line-opacity": 0.95
-    }
-  });
-
   /* ---------------- JOURNEY COMPLETED FLIGHT ---------------- */
   map.addSource("journey-flight", {
     type: "geojson",
-    data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } }
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [] }
+    }
   });
 
   map.addLayer({
@@ -159,7 +120,10 @@ map.on("load", () => {
   /* ---------------- JOURNEY COMPLETED DRIVING ---------------- */
   map.addSource("journey-drive", {
     type: "geojson",
-    data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } }
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [] }
+    }
   });
 
   map.addLayer({
@@ -177,7 +141,10 @@ map.on("load", () => {
   /* ---------------- JOURNEY CURRENT SEGMENT ---------------- */
   map.addSource("journey-current", {
     type: "geojson",
-    data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } }
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [] }
+    }
   });
 
   map.addLayer({
@@ -192,12 +159,11 @@ map.on("load", () => {
     }
   });
 
-  console.log("map-style.js: all journey + static layers created");
+  console.log("map-style.js: journey layers created (static routes removed)");
 });
 
 /* ============================================================
-   GLOBAL INITIALIZER
-   CALLED ONLY BY map-core.js
+   GLOBAL INITIALIZER (called by map-core.js)
 ============================================================ */
 
 window.initializeStyleLayers = async function () {
