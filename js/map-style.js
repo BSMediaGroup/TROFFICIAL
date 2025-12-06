@@ -1,19 +1,22 @@
 /* ============================================================
-   MAP STYLE BOOTSTRAP — v2 (CLEAN, MONOLITH-ACCURATE)
+   MAP STYLE BOOTSTRAP — v3 (FINAL MONOLITH-ACCURATE VERSION)
 ============================================================ */
 
 console.log("map-style.js loaded");
 
-/* Mapbox Base Style */
+/* ------------------------------------------------------------
+   BASE MAPBOX STYLE
+------------------------------------------------------------ */
+
 const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
 
 /* Token */
 mapboxgl.accessToken =
   "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
-/* ============================================================
+/* ------------------------------------------------------------
    CREATE MAP INSTANCE
-============================================================ */
+------------------------------------------------------------ */
 
 const map = new mapboxgl.Map({
   container: "map",
@@ -29,9 +32,9 @@ window.__MAP = map;
 
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
-/* ============================================================
-   FOG + STARFIELD
-============================================================ */
+/* ------------------------------------------------------------
+   FOG + STARFIELD (1:1 FROM MONOLITH)
+------------------------------------------------------------ */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
 const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";
@@ -39,66 +42,76 @@ const FOG_HORIZON_BLEND  = 0.45;
 const FOG_SPACE_COLOR    = "#02040A";
 const FOG_STAR_INTENSITY = 0.65;
 
+/* ============================================================
+   STYLE.LOAD — ALL PLACEHOLDER ROUTES + VISIBILITY
+============================================================ */
+
 map.on("style.load", () => {
   console.log("map-style.js: style.load fired");
 
+  /* Atmosphere */
   map.setFog({
-    color: FOG_COLOR,
-    "high-color": FOG_HIGH_COLOR,
-    "horizon-blend": FOG_HORIZON_BLEND,
-    "space-color": FOG_SPACE_COLOR,
+    color:          FOG_COLOR,
+    "high-color":   FOG_HIGH_COLOR,
+    "horizon-blend":FOG_HORIZON_BLEND,
+    "space-color":  FOG_SPACE_COLOR,
     "star-intensity": FOG_STAR_INTENSITY
   });
 
-  /* ========================================================
-     REQUIRED PLACEHOLDER LAYERS (EMPTY)
-     DO NOT DRAW ANYTHING — THEY MUST EXIST!
-  ======================================================== */
+  /* --------------------------------------------------------
+     PLACEHOLDER STATIC ROUTE SOURCES
+     These MUST exist, be empty, and be visible.
+     map-logic.js later REPLACES THEIR DATA.
+  -------------------------------------------------------- */
 
-  // --- STATIC FLIGHT ROUTE (EMPTY SHELL) ---
-  if (!map.getSource("flight-route")) {
-    map.addSource("flight-route", {
-      type: "geojson",
-      data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }}
-    });
-
-    map.addLayer({
-      id: "flight-route",
-      type: "line",
-      source: "flight-route",
-      paint: {
-        "line-color": "#478ED3",
-        "line-width": 3,
-        "line-dasharray": [3, 2],
-        "line-opacity": 0.9
-      }
-    });
+  function ensureEmptySource(id) {
+    if (!map.getSource(id)) {
+      map.addSource(id, {
+        type: "geojson",
+        data: { type:"Feature", geometry:{ type:"LineString", coordinates:[] } }
+      });
+    }
   }
 
-  // --- STATIC DRIVE ROUTE (EMPTY SHELL) ---
-  if (!map.getSource("drive-route")) {
-    map.addSource("drive-route", {
-      type: "geojson",
-      data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }}
-    });
+  /* Required empty shells: */
+  ensureEmptySource("flight-route");
+  ensureEmptySource("drive-route");
 
-    map.addLayer({
-      id: "drive-route",
-      type: "line",
-      source: "drive-route",
-      paint: {
-        "line-color": "#FF9C57",
-        "line-width": 4,
-        "line-opacity": 0.95
-      }
-    });
+  /* --------------------------------------------------------
+     LAYERS ATTACHED TO PLACEHOLDER ROUTES
+     These MUST exist BEFORE journey layers.
+  -------------------------------------------------------- */
+
+  function ensureLayer(id, source, paint) {
+    if (!map.getLayer(id)) {
+      map.addLayer({
+        id,
+        type: "line",
+        source,
+        layout: { visibility: "visible" },
+        paint
+      });
+    }
   }
 
-  console.log("map-style.js: placeholder route sources ready");
+  ensureLayer("flight-route", "flight-route", {
+    "line-color": "#478ED3",
+    "line-width": 3,
+    "line-dasharray": [3, 2],
+    "line-opacity": 0.9
+  });
+
+  ensureLayer("drive-route", "drive-route", {
+    "line-color": "#FF9C57",
+    "line-width": 4,
+    "line-opacity": 0.95
+  });
+
+  console.log("map-style.js: placeholder route layers ready");
 });
 
 /* ============================================================
-   NATION SHADING
+   NATION SHADING — EXACT BEHAVIOUR FROM MONOLITH
 ============================================================ */
 
 async function addNation(id, url, color, opacity) {
@@ -135,7 +148,7 @@ async function addNation(id, url, color, opacity) {
 }
 
 /* ============================================================
-   INITIALIZER CALLED BY map-core.js
+   initializer — called by map-core.js
 ============================================================ */
 
 window.initializeStyleLayers = async function () {
