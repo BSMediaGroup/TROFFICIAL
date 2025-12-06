@@ -4,14 +4,14 @@
 
 console.log("%cmap-logic.js loaded", "color:#ffaa00;font-weight:bold;");
 
-/* ==========================================================================
-   GLOBAL STATE (NO REDECLARATIONS — SAFE WITH map-ui.js)
-   ========================================================================== */
+/* ========================================================================== */
+/* IMPORTANT: NEVER TOUCH window.__MAP HERE                                  */
+/* The map instance is created in map-style.js                                */
+/* DO NOT overwrite it, DO NOT set it to null                                 */
+/* ========================================================================== */
 
-window.currentID = null;
+window.currentID   = null;
 window.journeyMode = false;
-
-window.__MAP = window.__MAP || null;
 
 /* Orbit animation state */
 let orbitInterval = null;
@@ -23,6 +23,7 @@ const ORBIT_PITCH_TARGET = 60;
 window.TRAVELLED_MI = {};
 window.TRAVELLED_KM = {};
 window.LEG_DIST = {};
+
 
 /* ==========================================================================
    GET WAYPOINT OBJECT
@@ -241,3 +242,4 @@ window.resetJourney = function () {
     }
   });
 })();
+
