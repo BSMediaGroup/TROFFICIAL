@@ -1,11 +1,10 @@
 /* ============================================================
-   MAP STYLE BOOTSTRAP — v2 (map-style.js)
-   * Corrected full version — no duplicated static sources *
+   MAP STYLE BOOTSTRAP — v2 (CLEAN, MONOLITH-ACCURATE)
 ============================================================ */
 
 console.log("map-style.js loaded");
 
-/* Mapbox Style */
+/* Mapbox Base Style */
 const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
 
 /* Token */
@@ -13,7 +12,7 @@ mapboxgl.accessToken =
   "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
 /* ============================================================
-   CREATE THE ONE AND ONLY MAP INSTANCE
+   CREATE THE ONE AND ONLY MAP INSTANCE — NO ROUTE LAYERS HERE
 ============================================================ */
 
 const map = new mapboxgl.Map({
@@ -31,7 +30,7 @@ window.__MAP = map;
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
 /* ============================================================
-   FOG + STARFIELD — STYLE.LOAD
+   FOG + STARFIELD — SAME LOOK AS YOUR ORIGINAL MONOLITH
 ============================================================ */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
@@ -53,7 +52,8 @@ map.on("style.load", () => {
 });
 
 /* ============================================================
-   NATION SHADING HELPERS
+   NATION SHADING (AUS / CAN / USA)
+   EXACT ORIGINAL COLORS + OPACITY
 ============================================================ */
 
 async function addNation(id, url, color, opacity) {
@@ -89,122 +89,8 @@ async function addNation(id, url, color, opacity) {
 }
 
 /* ============================================================
-   JOURNEY ROUTE SOURCES ONLY (NOT STATIC ROUTES)
-   Static routes now handled solely in map-logic.js
-============================================================ */
-
-map.on("load", () => {
-
-  /* ---------------- STATIC FLIGHT ROUTE ---------------- */
-  map.addSource("flight-route", {
-      type: "geojson",
-      data: {
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: [] }
-      }
-  });
-
-  map.addLayer({
-      id: "flight-route",
-      type: "line",
-      source: "flight-route",
-      paint: {
-          "line-color": "#478ED3",
-          "line-width": 3,
-          "line-dasharray": [3, 2],
-          "line-opacity": 0.9
-      }
-  });
-
-/* ---------------- STATIC DRIVING ROUTE ---------------- */
-  map.addSource("drive-route", {
-      type: "geojson",
-      data: {
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: [] }
-      }
-  });
-
-  map.addLayer({
-      id: "drive-route",
-      type: "line",
-      source: "drive-route",
-      paint: {
-          "line-color": "#FF9C57",
-          "line-width": 4,
-          "line-opacity": 0.95
-      }
-  });
-
-  /* ---------------- JOURNEY COMPLETED FLIGHT ---------------- */
-  map.addSource("journey-flight", {
-    type: "geojson",
-    data: {
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: [] }
-    }
-  });
-
-  map.addLayer({
-    id: "journey-flight",
-    type: "line",
-    source: "journey-flight",
-    layout: { visibility: "none" },
-    paint: {
-      "line-color": "#478ED3",
-      "line-width": 3,
-      "line-dasharray": [3, 2],
-      "line-opacity": 0.9
-    }
-  });
-
-  /* ---------------- JOURNEY COMPLETED DRIVING ---------------- */
-  map.addSource("journey-drive", {
-    type: "geojson",
-    data: {
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: [] }
-    }
-  });
-
-  map.addLayer({
-    id: "journey-drive",
-    type: "line",
-    source: "journey-drive",
-    layout: { visibility: "none" },
-    paint: {
-      "line-color": "#FF9C57",
-      "line-width": 4,
-      "line-opacity": 0.95
-    }
-  });
-
-  /* ---------------- JOURNEY CURRENT SEGMENT ---------------- */
-  map.addSource("journey-current", {
-    type: "geojson",
-    data: {
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: [] }
-    }
-  });
-
-  map.addLayer({
-    id: "journey-current",
-    type: "line",
-    source: "journey-current",
-    layout: { visibility: "none" },
-    paint: {
-      "line-color": "#FFFFFF",
-      "line-width": 4,
-      "line-opacity": 1.0
-    }
-  });
-
-  console.log("map-style.js: journey layers created (static routes removed)");
-});
-
-/* ============================================================
-   GLOBAL INITIALIZER (called by map-core.js)
+   STYLE INITIALIZER
+   (NO ROUTES. NO JOURNEY SOURCES. PURE STYLE ONLY.)
 ============================================================ */
 
 window.initializeStyleLayers = async function () {
@@ -235,8 +121,4 @@ window.initializeStyleLayers = async function () {
   console.log("initializeStyleLayers() complete.");
 };
 
-console.log(
-  "%cmap-style.js fully loaded",
-  "color:#00e5ff;font-weight:bold;"
-);
-
+console.log("%cmap-style.js fully loaded", "color:#00e5ff;font-weight:bold;");
