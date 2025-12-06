@@ -184,35 +184,48 @@ function applySunlightToWaypoint(wp) {
  */
 async function addNation(id, url, color, opacity) {
   try {
+    // Prevent duplicate source loading
+    if (map.getSource(id)) {
+      console.warn(`Nation source '${id}' already exists — skipping.`);
+      return;
+    }
+
     const res = await fetch(url);
     const geo = await res.json();
 
     map.addSource(id, { type: "geojson", data: geo });
 
-    map.addLayer({
-      id: id + "-fill",
-      type: "fill",
-      source: id,
-      paint: {
-        "fill-color": color,
-        "fill-opacity": opacity
-      }
-    });
+    // Fill layer
+    if (!map.getLayer(id + "-fill")) {
+      map.addLayer({
+        id: id + "-fill",
+        type: "fill",
+        source: id,
+        paint: {
+          "fill-color": color,
+          "fill-opacity": opacity
+        }
+      });
+    }
 
-    map.addLayer({
-      id: id + "-outline",
-      type: "line",
-      source: id,
-      paint: {
-        "line-color": color,
-        "line-width": 1.2
-      }
-    });
+    // Outline layer
+    if (!map.getLayer(id + "-outline")) {
+      map.addLayer({
+        id: id + "-outline",
+        type: "line",
+        source: id,
+        paint: {
+          "line-color": color,
+          "line-width": 1.2
+        }
+      });
+    }
 
   } catch (err) {
     console.error("Nation load error:", err);
   }
 }
+
 
 
 /* ============================================================
@@ -257,6 +270,7 @@ window.__MAP = map; // other modules will use this reference
 window.enable3DBuildings = enable3DBuildings;
 window.applySunlightToWaypoint = applySunlightToWaypoint;
 window.initializeStyleLayers = initializeStyleLayers;
+
 
 
 
