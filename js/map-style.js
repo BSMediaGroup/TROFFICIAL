@@ -4,15 +4,6 @@
 
 console.log("map-style.js loaded");
 
-/* Grab the ONE TRUE MAP INSTANCE created in map-core.js */
-const map = window.__MAP;
-
-if (!map) {
-  console.error("map-style.js: ❌ window.__MAP is missing. Abort.");
-} else {
-  console.log("map-style.js: ✓ Attached to existing map");
-}
-
 /* ======================================================================= */
 /* ===================== FOG + STARFIELD (STATIC) ======================== */
 /* ======================================================================= */
@@ -23,30 +14,31 @@ const FOG_HORIZON_BLEND  = 0.45;
 const FOG_SPACE_COLOR    = "#02040A";
 const FOG_STAR_INTENSITY = 0.65;
 
-map.on("style.load", () => {
-  map.setFog({
-    color: FOG_COLOR,
-    "high-color": FOG_HIGH_COLOR,
-    "horizon-blend": FOG_HORIZON_BLEND,
-    "space-color": FOG_SPACE_COLOR,
-    "star-intensity": FOG_STAR_INTENSITY
-  });
-});
-
 /* ======================================================================= */
 /* =========================== NATION SHADING ============================ */
 /* ======================================================================= */
 
 async function addNation(id, url, color, opacity) {
+  const map = window.__MAP;
+  if (!map) {
+    console.error(`map-style.js: ❌ window.__MAP missing when adding nation "${id}"`);
+    return;
+  }
+
   try {
+    // Safety: don't re-add if the source already exists
     if (map.getSource(id)) {
       console.warn(`map-style.js: Skipped duplicate source '${id}'`);
       return;
     }
 
-    const geo = await (await fetch(url)).json();
+    const res = await fetch(url);
+    const geo = await res.json();
 
-    map.addSource(id, { type: "geojson", data: geo });
+    map.addSource(id, {
+      type: "geojson",
+      data: geo
+    });
 
     map.addLayer({
       id: `${id}-fill`,
@@ -73,20 +65,49 @@ async function addNation(id, url, color, opacity) {
   }
 }
 
+/* ======================================================================= */
+/* ========== SINGLE ENTRY POINT CALLED BY map-core.js ON LOAD =========== */
+/* ======================================================================= */
+
 window.initializeStyleLayers = async function () {
+  const map = window.__MAP;
+  if (!map) {
+    console.error("map-style.js: ❌ window.__MAP is missing inside initializeStyleLayers()");
+    return;
+  }
+
   console.log("map-style.js: initializeStyleLayers()");
 
-  await addNation("aus",
+  // 1) Fog + starfield on the current style
+  map.setFog({
+    color: FOG_COLOR,
+    "high-color": FOG_HIGH_COLOR,
+    "horizon-blend": FOG_HORIZON_BLEND,
+    "space-color": FOG_SPACE_COLOR,
+    "star-intensity": FOG_STAR_INTENSITY
+  });
+
+  // 2) Nation shading – AU, CA, USA
+  await addNation(
+    "aus",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
-    "#1561CF", 0.12);
+    "#1561CF",
+    0.12
+  );
 
-  await addNation("can",
+  await addNation(
+    "can",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json",
-    "#CE2424", 0.12);
+    "#CE2424",
+    0.12
+  );
 
-  await addNation("usa",
+  await addNation(
+    "usa",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json",
-    "#FFFFFF", 0.12);
+    "#FFFFFF",
+    0.12
+  );
 };
 
 console.log("map-style.js fully loaded");
