@@ -4,10 +4,10 @@
    - Base Mapbox style
    - Globe projection
    - Fog & starfield
-   - Terrain
-   - 3D buildings
+   - Terrain (stub)
+   - 3D buildings (toggle)
    - Nation shading layers
-   - Sunlight system (scaffolding only)
+   - Sunlight system (stubs)
    NOTE:
    All styling values are migrated from the original file.
    No UI or logic changes are made here.
@@ -32,7 +32,6 @@ const map = new mapboxgl.Map({
 /* Navigation controls identical to original */
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
-
 /* ============================================================
    FOG / STARFIELD — MIGRATED EXACTLY
    ============================================================ */
@@ -53,17 +52,16 @@ map.on("style.load", () => {
   });
 });
 
-
 /* ============================================================
-   TERRAIN + SKY (standard compatibility scaffolding)
+   TERRAIN + SKY (scaffolding only)
    ============================================================ */
-/* Your dark-v11 style supports globe & fog but does not include DEM by default.
-   Terrain can be enabled after we add a DEM source, which we will do
-   later once interactions are stable.
-*/
 
+/*
+   dark-v11 supports globe & fog but has no DEM source by default.
+   We’ll wire terrain later if/when you want it.
+*/
 function enableTerrain() {
-  // Placeholder — DEM source will be added later if approved.
+  // Example (commented for now):
   // map.addSource("mapbox-dem", {
   //   type: "raster-dem",
   //   url: "mapbox://mapbox.terrain-rgb",
@@ -73,10 +71,8 @@ function enableTerrain() {
   // map.setTerrain({ source: "mapbox-dem", exaggeration: 1.0 });
 }
 
-
 /* ============================================================
-   3D BUILDINGS — MIGRATED AS A TOGGLE SYSTEM
-   (Off globally, activated during waypoint focus if approved)
+   3D BUILDINGS — TOGGLE SYSTEM
    ============================================================ */
 
 let buildingsEnabled = false;
@@ -88,10 +84,10 @@ function enable3DBuildings() {
   const layers = map.getStyle().layers;
   if (!layers) return;
 
-  // Find label layer to insert buildings underneath
+  // Find first symbol layer with text to insert buildings underneath
   let labelLayerId = null;
   for (const layer of layers) {
-    if (layer.type === "symbol" && layer.layout["text-field"]) {
+    if (layer.type === "symbol" && layer.layout && layer.layout["text-field"]) {
       labelLayerId = layer.id;
       break;
     }
@@ -127,20 +123,18 @@ function enable3DBuildings() {
   );
 }
 
-
 /* ============================================================
-   SUNLIGHT SYSTEM (stub — activated later)
+   SUNLIGHT SYSTEM (stub)
    ============================================================ */
 
 /**
  * Compute sun direction based on local time.
- * This is just a placeholder — the full model will be implemented
- * after all modules are loaded.
+ * This is a placeholder; full model can come later.
  */
 function computeSunDirectionForWaypoint(wp) {
   try {
     const now = new Date();
-    const tz = wp.meta?.timezone;
+    const tz  = wp.meta?.timezone;
 
     const hour = Number(
       new Intl.DateTimeFormat("en-US", {
@@ -161,7 +155,6 @@ function computeSunDirectionForWaypoint(wp) {
 
 /**
  * Apply sunlight settings to the map.
- * Future detail: dynamic color temperature based on sun position.
  */
 function applySunlightToWaypoint(wp) {
   const { altitude, azimuth } = computeSunDirectionForWaypoint(wp);
@@ -173,29 +166,31 @@ function applySunlightToWaypoint(wp) {
   });
 }
 
-
 /* ============================================================
-   NATION SHADING — EXACT DIRECT MIGRATION
+   NATION SHADING — DIRECT MIGRATION (WITH DUPLICATE GUARDS)
    ============================================================ */
 
 /**
  * Adds a polygon fill + outline for one nation.
- * Identical to your original implementation.
+ * Safe against multiple calls and duplicate IDs.
  */
 async function addNation(id, url, color, opacity) {
   try {
-    // Prevent duplicate source loading
+    // HARD CHECK: prevent duplicate sources across any re-init
     if (map.getSource(id)) {
-      console.warn(`Nation source '${id}' already exists — skipping.`);
+      console.warn(
+        `Nation source '${id}' already exists – skipping addNation('${id}')`
+      );
       return;
     }
 
     const res = await fetch(url);
     const geo = await res.json();
 
+    // Add source safely
     map.addSource(id, { type: "geojson", data: geo });
 
-    // Fill layer
+    // Fill layer (safe)
     if (!map.getLayer(id + "-fill")) {
       map.addLayer({
         id: id + "-fill",
@@ -208,7 +203,7 @@ async function addNation(id, url, color, opacity) {
       });
     }
 
-    // Outline layer
+    // Outline layer (safe)
     if (!map.getLayer(id + "-outline")) {
       map.addLayer({
         id: id + "-outline",
@@ -220,25 +215,28 @@ async function addNation(id, url, color, opacity) {
         }
       });
     }
-
   } catch (err) {
     console.error("Nation load error:", err);
   }
 }
 
-
-
 /* ============================================================
    STYLE INITIALIZATION ENTRYPOINT
-   Called from map.on("load") in UI/logic modules
+   Called from map.on("load") in core/logic modules
    ============================================================ */
 
+let __nationsLoaded = false;
+
 async function initializeStyleLayers() {
+  // Ensure we only ever add nation layers once,
+  // even if multiple modules call initializeStyleLayers()
+  if (__nationsLoaded) return;
+  __nationsLoaded = true;
+
   // Fog is already applied on style.load
-  // Terrain optional — enable later if approved
+  // Terrain optional — enable later if you want it
   // enableTerrain();
 
-  // National borders shading (identical to original)
   await addNation(
     "aus",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
@@ -261,18 +259,12 @@ async function initializeStyleLayers() {
   );
 }
 
-
 /* ============================================================
    EXPOSE MAP OBJECT GLOBALLY
    ============================================================ */
 
-window.__MAP = map; // other modules will use this reference
+window.__MAP = map; // core / UI modules use this
 window.enable3DBuildings = enable3DBuildings;
 window.applySunlightToWaypoint = applySunlightToWaypoint;
 window.initializeStyleLayers = initializeStyleLayers;
-
-
-
-
-
 
