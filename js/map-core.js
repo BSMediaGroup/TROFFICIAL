@@ -1,24 +1,24 @@
 /* ==========================================================================
-   MAP CORE ORCHESTRATOR — v2 (FINAL, MONOLITH-ACCURATE, SAFE)
+   MAP CORE ORCHESTRATOR — v3 (FINAL & MONOLITH-ACCURATE)
    ========================================================================== */
 
 console.log("%cmap-core.js loaded", "color:#00d0ff; font-weight:bold;");
 
-/* --------------------------------------------------------------------------
-   DO NOT RUN ANYTHING UNTIL map-style.js has created window.__MAP.
--------------------------------------------------------------------------- */
+/* ------------------------------------------------------------
+   WAIT FOR window.__MAP CREATED BY map-style.js
+------------------------------------------------------------ */
 
 function waitForMap(callback) {
     if (window.__MAP) {
         callback();
         return;
     }
-    console.warn("map-core.js: __MAP not ready — waiting...");
+    console.warn("map-core.js: __MAP not ready — waiting…");
     setTimeout(() => waitForMap(callback), 30);
 }
 
 /* ==========================================================================
-   MAIN INITIALIZATION
+   MAIN ORCHESTRATION
    ========================================================================== */
 
 waitForMap(() => {
@@ -26,15 +26,16 @@ waitForMap(() => {
 
     console.log("%cmap-core.js: __MAP detected", "color:#00ffaa;");
 
-    /* ----------------------------------------------------------------------
-       Ensure globals exist before executing map.load
-       ---------------------------------------------------------------------- */
+    /* --------------------------------------------------------
+       REQUIRED GLOBALS (NO LONGER CHECK addStaticRoutes TYPE)
+       -------------------------------------------------------- */
+
     const required = [
         "WAYPOINTS",
         "TRIP_ORDER",
         "initializeStyleLayers",
         "computeAllLegDistances",
-        "addStaticRoutes",
+        "addStaticRoutes",       // updater only — not creator
         "buildDrivingRoute",
         "addJourneySources",
         "buildMarkers",
@@ -49,46 +50,69 @@ waitForMap(() => {
         }
     });
 
-    /* ----------------------------------------------------------------------
-       SINGLE ENTRY POINT — Map LOAD EVENT
-       ---------------------------------------------------------------------- */
+    /* --------------------------------------------------------
+       MAP LOAD (true system start)
+       -------------------------------------------------------- */
 
     map.once("load", async () => {
         console.log("%cmap-core.js: map.load fired", "color:#00ffaa;");
 
-        /* 1) STYLE */
+        /* ----------------------------------------------------
+           1) STYLE LAYERS (nations)
+        ---------------------------------------------------- */
         await initializeStyleLayers();
         console.log("✓ Style layers initialized");
 
-        /* 2) DISTANCES */
+        /* ----------------------------------------------------
+           2) DISTANCES (for legend, HUD, journey)
+        ---------------------------------------------------- */
         computeAllLegDistances();
         console.log("✓ Distances computed");
 
-        /* 3) STATIC FLIGHT ROUTE */
+        /* ----------------------------------------------------
+           3) STATIC FLIGHT ROUTES
+              (This now *updates* existing placeholders)
+        ---------------------------------------------------- */
         addStaticRoutes();
         console.log("✓ Static flight routes added");
 
-        /* 4) DRIVING ROUTE (async Mapbox Directions call) */
+        /* ----------------------------------------------------
+           4) DRIVING ROUTE (Mapbox Directions API)
+        ---------------------------------------------------- */
         await buildDrivingRoute();
         console.log("✓ Driving route built");
 
-        /* 5) JOURNEY POLYLINE SOURCES */
+        /* ----------------------------------------------------
+           5) JOURNEY SOURCE LAYERS (flight/drive/current)
+        ---------------------------------------------------- */
         addJourneySources();
         console.log("✓ Journey sources added");
 
-        /* 6) MARKERS */
+        /* ----------------------------------------------------
+           6) MARKERS + POPUPS + CLICK BEHAVIOUR
+        ---------------------------------------------------- */
         buildMarkers();
         console.log("✓ Markers created");
 
-        /* 7) HUD */
+        /* ----------------------------------------------------
+           7) HUD INIT
+        ---------------------------------------------------- */
         updateHUD();
         console.log("✓ HUD ready");
 
-        /* 8) ENABLE GLOBE SPIN */
-        spinGlobe();
+        /* ----------------------------------------------------
+           8) AUTO-SPIN (disabled when journey begins)
+        ---------------------------------------------------- */
+        if (typeof window.MAP_READY === "undefined") {
+            window.MAP_READY = false;
+        }
+
+        spinGlobe();  
         console.log("✓ Globe spinning");
 
-        /* 9) MAP READY FLAG */
+        /* ----------------------------------------------------
+           9) ALL SYSTEMS READY
+        ---------------------------------------------------- */
         window.MAP_READY = true;
         console.log("%c✓ MAP SYSTEM READY", "color:#00ffcc; font-weight:bold;");
     });
