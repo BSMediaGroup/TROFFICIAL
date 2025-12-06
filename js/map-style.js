@@ -95,6 +95,47 @@ async function addNation(id, url, color, opacity) {
 
 map.on("load", () => {
 
+  /* ---------------- STATIC FLIGHT ROUTE ---------------- */
+  map.addSource("flight-route", {
+      type: "geojson",
+      data: {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [] }
+      }
+  });
+
+  map.addLayer({
+      id: "flight-route",
+      type: "line",
+      source: "flight-route",
+      paint: {
+          "line-color": "#478ED3",
+          "line-width": 3,
+          "line-dasharray": [3, 2],
+          "line-opacity": 0.9
+      }
+  });
+
+/* ---------------- STATIC DRIVING ROUTE ---------------- */
+  map.addSource("drive-route", {
+      type: "geojson",
+      data: {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [] }
+      }
+  });
+
+  map.addLayer({
+      id: "drive-route",
+      type: "line",
+      source: "drive-route",
+      paint: {
+          "line-color": "#FF9C57",
+          "line-width": 4,
+          "line-opacity": 0.95
+      }
+  });
+
   /* ---------------- JOURNEY COMPLETED FLIGHT ---------------- */
   map.addSource("journey-flight", {
     type: "geojson",
@@ -198,3 +239,4 @@ console.log(
   "%cmap-style.js fully loaded",
   "color:#00e5ff;font-weight:bold;"
 );
+
