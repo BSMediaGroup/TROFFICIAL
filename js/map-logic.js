@@ -535,6 +535,28 @@ function makeLineFeature(coords) {
 }
 
 /* ============================================================
+   HELPER FUNCTIONS — MUST BE TOP LEVEL
+   ============================================================ */
+
+function getZoom(id) {
+  if (["sydney", "la", "toronto"].includes(id)) return 6.7;
+  return 9.4;
+}
+
+function isFlight(a, b) {
+  return (a === "sydney" && b === "la") ||
+         (a === "la" && b === "toronto");
+}
+
+function getLegMode(id) {
+  const idx = TRIP_ORDER.indexOf(id);
+  const next = TRIP_ORDER[idx + 1];
+
+  if (next && isFlight(id, next)) return "Plane";
+  return getWP(id).mode;
+}
+
+/* ============================================================
    ANIMATE LEG (FLIGHT OR ROAD)
    ============================================================ */
 
@@ -1083,5 +1105,6 @@ window.getZoom = getZoom;
 
 
 console.log("%cmap-logic.js (section 5) loaded — COMPLETE", "color:#00ff88;font-weight:bold;");
+
 
 
