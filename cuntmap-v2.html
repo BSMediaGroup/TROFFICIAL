@@ -9,7 +9,7 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
-  <!-- Turf (harmless to keep even if not used) -->
+  <!-- Turf -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <!-- Main CSS -->
@@ -77,7 +77,7 @@
 
 
 <!-- ============================================================
-     JOURNEY HUD (BOTTOM OVERLAY)
+     JOURNEY HUD
 ============================================================ -->
 <div id="journeyHud" class="journey-hud">
   <div class="journey-hud-buttons">
@@ -96,7 +96,6 @@
 <div id="detailsSidebar" class="details-sidebar">
   <div class="details-sidebar-content">
 
-    <!-- Header: Main image + Close button -->
     <div class="details-sidebar-header">
       <img id="detailsSidebarImage" class="details-sidebar-image" src="" alt="">
       <button id="detailsSidebarClose" class="details-sidebar-close">×</button>
@@ -104,28 +103,23 @@
 
     <div class="details-sidebar-body">
 
-      <!-- Title Row -->
       <div class="details-sidebar-title-row">
         <img id="detailsSidebarIcon" class="details-sidebar-title-icon" src="" alt="">
         <h2 id="detailsSidebarTitle" class="details-sidebar-title"></h2>
       </div>
 
-      <!-- Location Line -->
       <div id="detailsSidebarLocation" class="details-sidebar-location"></div>
 
-      <!-- Description -->
       <div id="detailsSidebarDescription" class="details-sidebar-description"></div>
 
       <div class="details-sidebar-divider"></div>
 
-      <!-- Start Journey Button (shown when not in journey mode) -->
       <button id="detailsSidebarStartJourney"
               class="details-sidebar-hud-btn"
               style="display:none; margin-bottom:16px; width:100%;">
         Start Journey
       </button>
 
-      <!-- Sidebar HUD -->
       <div id="detailsSidebarHud" class="details-sidebar-hud">
         <div class="details-sidebar-hud-buttons">
           <button id="detailsHudPrev" class="details-sidebar-hud-btn">GO BACK</button>
@@ -136,19 +130,16 @@
 
       <div class="details-sidebar-divider"></div>
 
-      <!-- LOCATION INFO -->
       <section id="detailsLocationInfo" class="details-section">
         <div class="details-section-title">Location Info</div>
         <div id="detailsLocationInfoBody" class="details-location-grid"></div>
       </section>
 
-      <!-- WEATHER -->
       <section id="detailsWeather" class="details-section">
         <div class="details-section-title">Live Weather</div>
         <div id="detailsWeatherContent" class="details-weather-body"></div>
       </section>
 
-      <!-- DISTANCE -->
       <section id="detailsDistance" class="details-section">
         <div class="details-section-title">Route Distance</div>
         <div id="detailsDistanceContent" class="details-distance-body"></div>
@@ -156,32 +147,27 @@
 
       <div class="details-sidebar-divider"></div>
 
-      <!-- Explore Links (existing system) -->
       <div class="details-sidebar-links">
         <a id="detailsSidebarTourist"  class="details-sidebar-link" target="_blank">Tourist Places</a>
         <a id="detailsSidebarToilets"  class="details-sidebar-link" target="_blank">Toilets</a>
         <a id="detailsSidebarHotels"   class="details-sidebar-link" target="_blank">Hotels</a>
       </div>
 
-      <!-- =========================== -->
-      <!--   POI SECTIONS (AUTOFILL)   -->
-      <!-- =========================== -->
       <section class="details-section">
         <div class="details-section-title">Nearby Tourist Spots</div>
         <div id="detailsSidebarTouristList" class="details-poi-list"></div>
       </section>
-      
+
       <section class="details-section">
         <div class="details-section-title">Nearby Toilets</div>
         <div id="detailsSidebarToiletsList" class="details-poi-list"></div>
       </section>
-      
+
       <section class="details-section">
         <div class="details-section-title">Nearby Hotels</div>
         <div id="detailsSidebarHotelsList" class="details-poi-list"></div>
       </section>
 
-      <!-- Future Content Placeholder -->
       <div id="detailsSidebarFuture" class="details-sidebar-future">
         Future content for this waypoint will appear here.
       </div>
@@ -193,10 +179,8 @@
 
 
 <!-- ============================================================
-     SCRIPT MODULE LOADING — THE ONLY CORRECT ORDER
+     SCRIPT MODULE LOADING — FIXED ORDER
 ============================================================ -->
-
-
 
 <!-- 1️⃣ CONFIG -->
 <script src="js/map-config.js"></script>
@@ -204,28 +188,17 @@
 <!-- 2️⃣ DATA -->
 <script src="js/map-data.js"></script>
 
-<!-- 3️⃣ CORE (bootstrap + validation MUST come BEFORE map creation) -->
-<script src="js/map-core.js"></script>
-
-<!-- 4️⃣ STYLE (creates window.__MAP) -->
+<!-- 3️⃣ STYLE (this creates window.__MAP – MUST LOAD BEFORE CORE) -->
 <script src="js/map-style.js"></script>
 
-<!-- 5️⃣ LOGIC (orbit, animation, journey) -->
+<!-- 4️⃣ CORE (now window.__MAP exists) -->
+<script src="js/map-core.js"></script>
+
+<!-- 5️⃣ LOGIC -->
 <script src="js/map-logic.js"></script>
 
-<!-- 6️⃣ UI (markers, popups, HUD, sidebar) -->
+<!-- 6️⃣ UI -->
 <script src="js/map-ui.js"></script>
-
-
-
 
 </body>
 </html>
-
-
-
-
-
-
-
-
