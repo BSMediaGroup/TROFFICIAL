@@ -1,51 +1,47 @@
 /* ============================================================
    MAP LOGIC MODULE — v2
-   SECTION 1 — CORE STATE, SPIN LOGIC, DISTANCE SYSTEM
+   SECTION 1 — MAP INIT, SPIN ENGINE, INTERACTION HOOKS
    ============================================================ */
 
 console.log("map-logic.js loaded");
 
 /* ============================================================
-   GLOBAL STATE SHARED WITH OTHER MODULES
+   MAP READY HOOK
    ============================================================ */
 
-let currentID = null;
-let journeyMode = false;
-let spinning = true;
-let userInterrupted = false;
-let MAP_READY = false;
-
-/* The map object is provided by map-style.js as window.__MAP */
-const map = window.__MAP;
-
-/* Shared references updated later */
-let orbitEnterTimer = null;
-let orbitAnimFrame = null;
-let orbitTargetId = null;
+window.__MAP.on("load", () => {
+  MAP_READY = true;
+});
 
 /* ============================================================
-   SPINNING GLOBE — TRUE EARTH AXIS ROTATION
+   TRUE EARTH AXIS SPIN (WEST → EAST)
+   Matches original behaviour exactly.
    ============================================================ */
 
 function spinGlobe() {
   if (!spinning || journeyMode) return;
 
-  const c = map.getCenter();
+  const c = window.__MAP.getCenter();
   const newLon = c.lng - 0.02;
 
   const t = Date.now() * 0.00005;
   const pitch = 10 + Math.sin(t) * 3;
 
-  map.setCenter([newLon, c.lat]);
-  map.setPitch(pitch);
+  window.__MAP.setCenter([newLon, c.lat]);
+  window.__MAP.setPitch(pitch);
 
   requestAnimationFrame(spinGlobe);
 }
 
-/* Stop spin on user interaction */
+/* ============================================================
+   STOP SPIN ON USER INTERACTION
+   (original behaviour preserved exactly)
+   ============================================================ */
+
 ["mousedown","touchstart","wheel","keydown"].forEach(ev => {
-  map.on(ev, e => {
+  window.__MAP.on(ev, e => {
     if (!e.originalEvent) return;
+
     spinning = false;
     userInterrupted = true;
 
@@ -54,36 +50,76 @@ function spinGlobe() {
       if (btn) btn.style.display = "block";
     }
 
-    stopOrbit();
+    stopOrbit(); // orbit engine comes later
   });
 });
 
 /* ============================================================
-   DISTANCE STORAGE
+   UTILITY — GET WAYPOINT BY ID
    ============================================================ */
-
-const LEG_DIST     = {};  // distance between successive trip order legs
-const TRAVELLED_KM = {};  // cumulative
-const TRAVELLED_MI = {};  // cumulative
-
-/* Haversine (duplicate kept for logic compatibility) */
-function haversine(a,b){
-  const R=6371, toRad=d=>d*Math.PI/180;
-  const dLat=toRad(b[1]-a[1]);
-  const dLon=toRad(b[0]-a[0]);
-  const lat1=toRad(a[1]);
-  const lat2=toRad(b[1]);
-  const h=Math.sin(dLat/2)**2 +
-           Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
-  return 2*R*Math.asin(Math.sqrt(h));
-}
 
 function getWP(id) {
   return WAYPOINTS.find(w => w.id === id);
 }
 
 /* ============================================================
-   INITIALIZE TRIP DISTANCES
+   UTILITY — ESCAPE HTML FOR SAFE INJECTION
+   ============================================================ */
+
+function escapeHTML(str) {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/* ============================================================
+   EXPORTS (SECTION 1)
+   ============================================================ */
+
+window.spinGlobe = spinGlobe;
+window.getWP = getWP;
+window.escapeHTML = escapeHTML;
+
+console.log("%cmap-logic.js (section 1) loaded", "color:#00e5ff;font-weight:bold;");
+
+
+/* ============================================================
+   MAP LOGIC MODULE — v2
+   SECTION 2 — DISTANCE ENGINE + GREAT CIRCLE GENERATOR
+   ============================================================ */
+
+/* ============================================================
+   STORAGE FOR LEG DISTANCES + TRAVELLED DISTANCE MAPS
+   ============================================================ */
+
+window.LEG_DIST     = {};
+window.TRAVELLED_KM = {};
+window.TRAVELLED_MI = {};
+
+/* ============================================================
+   HAVERSINE DISTANCE
+   ============================================================ */
+
+function haversine(a, b) {
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+
+  const dLat = toRad(b[1] - a[1]);
+  const dLon = toRad(b[0] - a[0]);
+  const lat1 = toRad(a[1]);
+  const lat2 = toRad(b[1]);
+
+  const h = Math.sin(dLat/2)**2 +
+            Math.cos(lat1) * Math.cos(lat2) *
+            Math.sin(dLon/2)**2;
+
+  return 2 * R * Math.asin(Math.sqrt(h)); // km
+}
+
+/* ============================================================
+   INIT DISTANCES (TRIP ORDER)
    ============================================================ */
 
 function initDistances() {
@@ -99,8 +135,9 @@ function initDistances() {
 
     const prev = getWP(TRIP_ORDER[i - 1]);
     const cur  = getWP(id);
-    const km   = haversine(prev.coords, cur.coords);
-    const mi   = km * 0.621371;
+
+    const km = haversine(prev.coords, cur.coords);
+    const mi = km * 0.621371;
 
     LEG_DIST[prev.id] = {
       km: +km.toFixed(1),
@@ -115,15 +152,15 @@ function initDistances() {
   });
 
   const last = TRIP_ORDER.at(-1);
-  const legend = document.getElementById("legendTotalDistance");
-  if (legend) {
-    legend.textContent =
-      `Total Distance: ${TRAVELLED_MI[last]}mi (${TRAVELLED_KM[last]}km)`;
+  const el = document.getElementById("legendTotalDistance");
+  if (el) {
+    el.textContent = `Total Distance: ${TRAVELLED_MI[last]}mi (${TRAVELLED_KM[last]}km)`;
   }
 }
 
 /* ============================================================
-   UTILITY COPYING FROM ORIGINAL (for route building)
+   NORMALIZE COORDINATES
+   Keeps longitude in [-180,180], clamps latitude
    ============================================================ */
 
 function normalizeCoord(lon, lat) {
@@ -133,23 +170,18 @@ function normalizeCoord(lon, lat) {
   return [lon, lat];
 }
 
-function toRad(deg){ return deg*Math.PI/180; }
-function toDeg(rad){ return rad*180/Math.PI; }
-
-/* EXPORT SECTION 1 FUNCTIONS GLOBALLY IF NEEDED */
-window.spinGlobe = spinGlobe;
-window.initDistances = initDistances;
-window.getWP = getWP;
-window.LEG_DIST = LEG_DIST;
-window.TRAVELLED_KM = TRAVELLED_KM;
-window.TRAVELLED_MI = TRAVELLED_MI;
-
 /* ============================================================
-   MAP LOGIC MODULE — v2
-   SECTION 2 — ROUTING SYSTEM
+   DEGREES <-> RADIANS HELPERS
    ============================================================ */
 
-/* Great-circle routing with dateline fix */
+function toRad(deg) { return deg * Math.PI / 180; }
+function toDeg(rad) { return rad * 180 / Math.PI; }
+
+/* ============================================================
+   GREAT CIRCLE — ZIGZAG-FIXED VERSION
+   EXACT COPY OF YOUR PROVEN FIXED IMPLEMENTATION
+   ============================================================ */
+
 function buildGreatCircle(fromId, toId, steps = 220) {
   const [lon1d, lat1] = getWP(fromId).coords;
   const [lon2d, lat2] = getWP(toId).coords;
@@ -161,18 +193,23 @@ function buildGreatCircle(fromId, toId, steps = 220) {
 
   let dλ = λ2 - λ1;
 
-  /* ZIGZAG FIX — ensure shortest Pacific path */
+  /* ------------------------------------------------------------
+     ZIGZAG FIX
+     If the longitude separation > 180°, wrap around
+     ------------------------------------------------------------ */
   if (Math.abs(dλ) > Math.PI) {
     if (dλ > 0) λ1 += 2 * Math.PI;
     else        λ2 += 2 * Math.PI;
     dλ = λ2 - λ1;
   }
 
+  /* Central angle */
   const Δ = 2 * Math.asin(Math.sqrt(
-    Math.sin((φ2 - φ1) / 2) ** 2 +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(dλ / 2) ** 2
+    Math.sin((φ2 - φ1) / 2)**2 +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(dλ / 2)**2
   ));
 
+  /* Identical coords fallback */
   if (!Number.isFinite(Δ) || Δ === 0) {
     const p1 = normalizeCoord(lon1d, lat1);
     const p2 = normalizeCoord(lon2d, lat2);
@@ -180,16 +217,19 @@ function buildGreatCircle(fromId, toId, steps = 220) {
   }
 
   const coords = [];
+
+  /* Interpolate great circle positions */
   for (let i = 0; i <= steps; i++) {
     const f = i / steps;
+
     const A = Math.sin((1 - f) * Δ) / Math.sin(Δ);
     const B = Math.sin(f * Δ) / Math.sin(Δ);
 
     const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2);
     const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2);
-    const z = A * Math.sin(φ1) + B * Math.sin(φ2);
+    const z = A * Math.sin(φ1)              + B * Math.sin(φ2);
 
-    const φ = Math.atan2(z, Math.sqrt(x * x + y * y));
+    const φ = Math.atan2(z, Math.sqrt(x*x + y*y));
     const λ = Math.atan2(y, x);
 
     const lon = toDeg(λ);
@@ -203,16 +243,41 @@ function buildGreatCircle(fromId, toId, steps = 220) {
 }
 
 /* ============================================================
-   STATIC FLIGHT ROUTE (Sydney → LA → Toronto)
+   EXPORT SECTION 2
+   ============================================================ */
+
+window.haversine = haversine;
+window.initDistances = initDistances;
+window.normalizeCoord = normalizeCoord;
+window.buildGreatCircle = buildGreatCircle;
+
+console.log("%cmap-logic.js (section 2) loaded", "color:#00e5ff;font-weight:bold;");
+
+
+/* ============================================================
+   MAP LOGIC MODULE — v2
+   SECTION 3 — STATIC ROUTES + DRIVING ROUTE ENGINE
+   ============================================================ */
+
+/* ============================================================
+   DRIVING ROUTE STORAGE
+   ============================================================ */
+
+window.DRIVING_GEOM = [];
+window.DRIVE_INDEX  = {};
+
+/* ============================================================
+   STATIC FLIGHT ROUTE LAYER
+   (Uses great-circle generator)
    ============================================================ */
 
 function addStaticRoutes() {
   const SYD_LA = buildGreatCircle("sydney", "la");
-  const LA_TOR = buildGreatCircle("la", "toronto").slice(1);
+  const LA_YTZ = buildGreatCircle("la", "toronto").slice(1);
 
-  const allFlight = [...SYD_LA, ...LA_TOR];
+  const allFlight = [...SYD_LA, ...LA_YTZ];
 
-  map.addSource("flight-route", {
+  window.__MAP.addSource("flight-route", {
     type: "geojson",
     data: {
       type: "Feature",
@@ -222,7 +287,7 @@ function addStaticRoutes() {
     }
   });
 
-  map.addLayer({
+  window.__MAP.addLayer({
     id: "flight-route",
     type: "line",
     source: "flight-route",
@@ -236,11 +301,8 @@ function addStaticRoutes() {
 }
 
 /* ============================================================
-   DRIVING ROUTE (Mapbox Directions API)
+   DRIVING ROUTE (MAPBOX DIRECTIONS API)
    ============================================================ */
-
-let DRIVING_GEOM = [];
-let DRIVE_INDEX  = {};
 
 async function buildDrivingRoute() {
   const coords = DRIVE_ORDER.map(id => getWP(id).coords);
@@ -253,16 +315,18 @@ async function buildDrivingRoute() {
 
   const res = await fetch(url);
   const json = await res.json();
+
   if (!json.routes || !json.routes.length) return;
 
   DRIVING_GEOM = json.routes[0].geometry.coordinates;
 
-  map.addSource("drive-route", {
+  /* Push layer + source */
+  window.__MAP.addSource("drive-route", {
     type: "geojson",
     data: json.routes[0].geometry
   });
 
-  map.addLayer({
+  window.__MAP.addLayer({
     id: "drive-route",
     type: "line",
     source: "drive-route",
@@ -272,6 +336,10 @@ async function buildDrivingRoute() {
       "line-opacity": 0.95
     }
   });
+
+  /* ========================================================
+     BUILD DRIVE_INDEX (closest geometry point per waypoint)
+     ======================================================== */
 
   coords.forEach((wp, i) => {
     let bestIndex = 0;
@@ -307,61 +375,155 @@ function roadLeg(a, b) {
 }
 
 /* ============================================================
-   FLIGHT vs DRIVE DECISION
+   EXPORT SECTION 3
    ============================================================ */
 
-function isFlight(a, b) {
-  return (a === "sydney" && b === "la") ||
-         (a === "la" && b === "toronto");
-}
-
-/* ============================================================
-   BUILD COMPLETED ROUTE UNTIL A GIVEN WAYPOINT
-   ============================================================ */
-
-function buildCompleteUntil(id) {
-  const out = { flight: [], drive: [] };
-
-  const append = (arr, seg) => {
-    if (!seg.length) return;
-    if (!arr.length) {
-      arr.push(...seg);
-    } else {
-      /* Remove duplicate join point */
-      arr.push(...seg.slice(1));
-    }
-  };
-
-  const idx = TRIP_ORDER.indexOf(id);
-
-  for (let i = 0; i < idx; i++) {
-    const a = TRIP_ORDER[i];
-    const b = TRIP_ORDER[i + 1];
-
-    if (isFlight(a, b)) {
-      append(out.flight, buildGreatCircle(a, b));
-    } else {
-      append(out.drive, roadLeg(a, b));
-    }
-  }
-
-  return out;
-}
-
-/* EXPORT SECTION 2 FUNCTIONS GLOBALLY IF NEEDED */
-window.buildGreatCircle = buildGreatCircle;
 window.addStaticRoutes = addStaticRoutes;
 window.buildDrivingRoute = buildDrivingRoute;
 window.roadLeg = roadLeg;
-window.isFlight = isFlight;
-window.buildCompleteUntil = buildCompleteUntil;
+
+console.log("%cmap-logic.js (section 3) loaded", "color:#00e5ff;font-weight:bold;");
+
 
 /* ============================================================
    MAP LOGIC MODULE — v2
-   SECTION 3 — JOURNEY ENGINE
+   SECTION 4 — ORBIT CAMERA ENGINE
    ============================================================ */
 
-/* Wrap line coordinates into a GeoJSON feature */
+/* ============================================================
+   ORBIT ENGINE STATE
+   ============================================================ */
+
+let orbitTargetId   = null;
+let orbitAnimFrame  = null;
+let orbitEnterTimer = null;
+
+/* ============================================================
+   STOP ANY ACTIVE ORBIT
+   ============================================================ */
+
+function stopOrbit() {
+  if (orbitEnterTimer !== null) {
+    clearTimeout(orbitEnterTimer);
+    orbitEnterTimer = null;
+  }
+  if (orbitAnimFrame !== null) {
+    cancelAnimationFrame(orbitAnimFrame);
+    orbitAnimFrame = null;
+  }
+  orbitTargetId = null;
+}
+
+/* ============================================================
+   START CONTINUOUS ORBIT
+   ============================================================ */
+
+function startOrbit(id) {
+  orbitTargetId = id;
+  orbitAnimFrame = requestAnimationFrame(orbitLoop);
+}
+
+/* ============================================================
+   ORBIT LOOP — BEARING ROTATION
+   ============================================================ */
+
+function orbitLoop() {
+  if (!orbitTargetId) return;
+
+  const wp = getWP(orbitTargetId);
+  if (!wp) {
+    stopOrbit();
+    return;
+  }
+
+  const newBearing = window.__MAP.getBearing() + ORBIT_ROTATION_SPEED;
+  window.__MAP.setBearing(newBearing);
+
+  orbitAnimFrame = requestAnimationFrame(orbitLoop);
+}
+
+/* ============================================================
+   MANUAL / DOUBLE-CLICK FOCUS (PITCH 75°)
+   ============================================================ */
+
+function focusWaypointOrbit(id) {
+  const wp = getWP(id);
+  if (!wp) return;
+
+  stopOrbit();
+
+  window.__MAP.easeTo({
+    center: wp.coords,
+    zoom: ORBIT_ZOOM_TARGET,
+    pitch: ORBIT_PITCH_TARGET,  // 75°
+    bearing: window.__MAP.getBearing(),
+    duration: ORBIT_ENTRY_DURATION
+  });
+
+  orbitEnterTimer = setTimeout(() => {
+    orbitEnterTimer = null;
+    startOrbit(id);
+  }, ORBIT_ENTRY_DURATION);
+}
+
+/* ============================================================
+   JOURNEY-MODE ORBIT (PITCH 55°)
+   ============================================================ */
+
+function focusJourneyOrbit(id) {
+  const wp = getWP(id);
+  if (!wp) return;
+
+  stopOrbit();
+
+  const isLaOrToronto = (id === "la" || id === "toronto");
+  const journeyZoom   = isLaOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+
+  window.__MAP.easeTo({
+    center: wp.coords,
+    zoom: journeyZoom,
+    pitch: JOURNEY_PITCH_TARGET,   // 55°
+    bearing: window.__MAP.getBearing(),
+    duration: ORBIT_ENTRY_DURATION
+  });
+
+  orbitEnterTimer = setTimeout(() => {
+    orbitEnterTimer = null;
+    startOrbit(id);
+  }, ORBIT_ENTRY_DURATION);
+}
+
+/* ============================================================
+   STOP ORBIT ON REAL USER INPUT (IDENTICAL TO ORIGINAL)
+   ============================================================ */
+
+["mousedown", "wheel", "touchstart", "dragstart"].forEach(ev => {
+  window.__MAP.on(ev, () => {
+    stopOrbit();
+  });
+});
+
+/* ============================================================
+   EXPORT SECTION 4
+   ============================================================ */
+
+window.stopOrbit = stopOrbit;
+window.startOrbit = startOrbit;
+window.focusWaypointOrbit = focusWaypointOrbit;
+window.focusJourneyOrbit  = focusJourneyOrbit;
+
+console.log("%cmap-logic.js (section 4) loaded", "color:#00e5ff;font-weight:bold;");
+
+
+/* ============================================================
+   MAP LOGIC MODULE — v2
+   SECTION 5 — JOURNEY ENGINE + ROUTE ANIMATIONS + INIT HOOK
+   ============================================================ */
+
+/* ============================================================
+   BASIC GEOJSON LINE FEATURE MAKER
+   ============================================================ */
+
 function makeLineFeature(coords) {
   return {
     type: "Feature",
@@ -373,12 +535,12 @@ function makeLineFeature(coords) {
 }
 
 /* ============================================================
-   ANIMATE A LEG (Sydney → LA special case preserved)
+   ANIMATE LEG (FLIGHT OR ROAD)
    ============================================================ */
 
 function animateLeg(a, b) {
   if (a === b) return;
-  if (!map || !map.isStyleLoaded()) return;
+  if (!window.__MAP || !window.__MAP.isStyleLoaded()) return;
 
   stopOrbit();
 
@@ -386,11 +548,13 @@ function animateLeg(a, b) {
   const seg = isF ? buildGreatCircle(a, b) : roadLeg(a, b);
   if (!Array.isArray(seg) || seg.length === 0) return;
 
-  const srcF = map.getSource("journey-flight");
-  const srcD = map.getSource("journey-drive");
-  const srcC = map.getSource("journey-current");
+  const srcF = window.__MAP.getSource("journey-flight");
+  const srcD = window.__MAP.getSource("journey-drive");
+  const srcC = window.__MAP.getSource("journey-current");
+
   if (!srcF || !srcD || !srcC) return;
 
+  /* Completed segments up to A */
   const comp = buildCompleteUntil(a);
 
   srcF.setData(makeLineFeature(comp.flight));
@@ -398,9 +562,14 @@ function animateLeg(a, b) {
   srcC.setData(makeLineFeature([]));
 
   const partialColor = isF ? "#478ED3" : "#FF9C57";
-  map.setPaintProperty("journey-current", "line-color", partialColor);
-  map.setPaintProperty("journey-current", "line-width", isF ? 3 : 4);
-  map.setPaintProperty("journey-current", "line-dasharray", isF ? [3, 2] : [1, 0]);
+
+  window.__MAP.setPaintProperty("journey-current", "line-color", partialColor);
+  window.__MAP.setPaintProperty("journey-current", "line-width", isF ? 3 : 4);
+  window.__MAP.setPaintProperty(
+    "journey-current",
+    "line-dasharray",
+    isF ? [3, 2] : [1, 0]
+  );
 
   const duration = isF ? 4200 : 1800;
 
@@ -423,7 +592,7 @@ function animateLeg(a, b) {
   }
 
   /* ============================================================
-     SPECIAL CASE: SYDNEY → LA (three-stage camera animation)
+     SPECIAL 3-PHASE SYD → LA ANIMATION
      ============================================================ */
   if (sydneyToLA) {
     const smooth = t => t * t * (3 - 2 * t);
@@ -435,40 +604,44 @@ function animateLeg(a, b) {
     const PHASE1 = 1600;
     const PHASE2 = 1600;
     const PHASE3 = 2200;
+
     const finalZoom = JOURNEY_ZOOM_LA;
 
-    map.easeTo({
+    /* PHASE 1 */
+    window.__MAP.easeTo({
       center: Syd.coords,
       zoom: 3.5,
       pitch: 0,
-      bearing: map.getBearing(),
+      bearing: window.__MAP.getBearing(),
       duration: PHASE1,
       easing: smooth
     });
 
+    /* PHASE 2 */
     setTimeout(() => {
-      map.easeTo({
+      window.__MAP.easeTo({
         center: LA.coords,
         zoom: 3.5,
         pitch: 0,
-        bearing: map.getBearing(),
+        bearing: window.__MAP.getBearing(),
         duration: PHASE2,
         easing: smooth
       });
     }, PHASE1);
 
+    /* PHASE 3 */
     setTimeout(() => {
-      map.easeTo({
+      window.__MAP.easeTo({
         center: LA.coords,
         zoom: finalZoom,
         pitch: JOURNEY_PITCH_TARGET,
-        bearing: map.getBearing(),
+        bearing: window.__MAP.getBearing(),
         duration: PHASE3,
         easing: smooth
       });
     }, PHASE1 + PHASE2);
 
-    /* Finalize movement */
+    /* Finalize (open popup + start orbit) */
     setTimeout(() => {
       currentID = b;
       openPopupFor(b);
@@ -480,7 +653,7 @@ function animateLeg(a, b) {
       }
     }, PHASE1 + PHASE2 + PHASE3);
 
-    /* Polyline animator */
+    /* Polyline animation */
     const start = performance.now();
     const total = seg.length;
 
@@ -491,10 +664,10 @@ function animateLeg(a, b) {
 
       srcC.setData(makeLineFeature(partial));
 
-      if (prog < 1) {
-        requestAnimationFrame(frame);
-      } else {
+      if (prog < 1) requestAnimationFrame(frame);
+      else {
         const after = buildCompleteUntil(b);
+
         srcF.setData(makeLineFeature(after.flight));
         srcD.setData(makeLineFeature(after.drive));
         srcC.setData(makeLineFeature([]));
@@ -506,13 +679,13 @@ function animateLeg(a, b) {
   }
 
   /* ============================================================
-     STANDARD LEG ANIMATION
+     NORMAL JOURNEY ANIMATION
      ============================================================ */
 
   const targetWP = getWP(b);
   if (!targetWP) return;
 
-  map.easeTo({
+  window.__MAP.easeTo({
     center: targetWP.coords,
     zoom: travelZoom,
     pitch: 0,
@@ -521,12 +694,12 @@ function animateLeg(a, b) {
     essential: false
   });
 
-  const startTime = performance.now();
-  const totalCount = seg.length;
+  const startStandard = performance.now();
+  const totalStandard = seg.length;
 
   function frameStandard(t) {
-    const prog = Math.min((t - startTime) / duration, 1);
-    const count = Math.max(2, Math.floor(prog * totalCount));
+    const prog = Math.min((t - startStandard) / duration, 1);
+    const count = Math.max(2, Math.floor(prog * totalStandard));
     const partial = seg.slice(0, count);
 
     srcC.setData(makeLineFeature(partial));
@@ -535,6 +708,7 @@ function animateLeg(a, b) {
       requestAnimationFrame(frameStandard);
     } else {
       const after = buildCompleteUntil(b);
+
       srcF.setData(makeLineFeature(after.flight));
       srcD.setData(makeLineFeature(after.drive));
       srcC.setData(makeLineFeature([]));
@@ -554,22 +728,23 @@ function animateLeg(a, b) {
 }
 
 /* ============================================================
-   UNDO LEG (step backward one waypoint)
+   UNDO LEG (STEP BACKWARD)
    ============================================================ */
 
 function undoTo(id) {
   stopOrbit();
 
-  const srcF = map.getSource("journey-flight");
-  const srcD = map.getSource("journey-drive");
-  const srcC = map.getSource("journey-current");
+  const srcF = window.__MAP.getSource("journey-flight");
+  const srcD = window.__MAP.getSource("journey-drive");
+  const srcC = window.__MAP.getSource("journey-current");
+
   if (!srcF || !srcD || !srcC) return;
 
   const comp = buildCompleteUntil(id);
 
-  srcF.setData(makeLineFeature(comp.flight));
-  srcD.setData(makeLineFeature(comp.drive));
-  srcC.setData(makeLineFeature([]));
+  srcF.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: comp.flight }});
+  srcD.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: comp.drive }});
+  srcC.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] }});
 
   openPopupFor(id);
   currentID = id;
@@ -580,6 +755,32 @@ function undoTo(id) {
   if (detailsSidebar.classList.contains("open")) {
     openDetailsSidebar(id);
   }
+}
+
+/* ============================================================
+   BUILD COMPLETED ROUTE UP TO A GIVEN WAYPOINT
+   ============================================================ */
+
+function buildCompleteUntil(id) {
+  const out = { flight: [], drive: [] };
+
+  const append = (arr, seg) => {
+    if (!seg.length) return;
+    if (!arr.length) arr.push(...seg);
+    else arr.push(...seg.slice(1));
+  };
+
+  const idx = TRIP_ORDER.indexOf(id);
+
+  for (let i = 0; i < idx; i++) {
+    const a = TRIP_ORDER[i];
+    const b = TRIP_ORDER[i + 1];
+
+    if (isFlight(a, b)) append(out.flight, buildGreatCircle(a, b));
+    else append(out.drive, roadLeg(a, b));
+  }
+
+  return out;
 }
 
 /* ============================================================
@@ -601,19 +802,19 @@ function resetJourney() {
   stopOrbit();
 
   ["journey-flight","journey-drive","journey-current"].forEach(id => {
-    if (map.getLayer(id)) {
-      map.setLayoutProperty(id, "visibility", "none");
-      const src = map.getSource(id);
+    if (window.__MAP.getLayer(id)) {
+      window.__MAP.setLayoutProperty(id, "visibility", "none");
+      const src = window.__MAP.getSource(id);
       if (src) src.setData(makeLineFeature([]));
     }
   });
 
-  if (map.getLayer("flight-route"))
-    map.setLayoutProperty("flight-route","visibility","visible");
-  if (map.getLayer("drive-route"))
-    map.setLayoutProperty("drive-route","visibility","visible");
+  if (window.__MAP.getLayer("flight-route"))
+    window.__MAP.setLayoutProperty("flight-route","visibility","visible");
+  if (window.__MAP.getLayer("drive-route"))
+    window.__MAP.setLayoutProperty("drive-route","visibility","visible");
 
-  map.jumpTo({
+  window.__MAP.jumpTo({
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
     pitch: 0,
@@ -624,9 +825,7 @@ function resetJourney() {
   updateHUD();
 }
 
-/* ============================================================
-   STATIC MAP RESET BUTTON
-   ============================================================ */
+/* Reset static map (non-journey) */
 document.getElementById("resetStaticMap").addEventListener("click", () => {
   if (journeyMode) return;
 
@@ -636,7 +835,7 @@ document.getElementById("resetStaticMap").addEventListener("click", () => {
   closeAllPopups();
   stopOrbit();
 
-  map.jumpTo({
+  window.__MAP.jumpTo({
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
     pitch: 0,
@@ -657,7 +856,7 @@ document.getElementById("journeyToggle").addEventListener("click", () => {
 });
 
 /* ============================================================
-   START JOURNEY
+   START JOURNEY (FROM SYDNEY)
    ============================================================ */
 
 function startJourney() {
@@ -668,26 +867,27 @@ function startJourney() {
   userInterrupted = true;
 
   const journeyToggleBtn = document.getElementById("journeyToggle");
-  const resetBtn = document.getElementById("resetStaticMap");
+  const resetStaticMapBtn = document.getElementById("resetStaticMap");
 
   if (journeyToggleBtn) journeyToggleBtn.textContent = "Reset Journey";
-  if (resetBtn) resetBtn.style.display = "none";
+  if (resetStaticMapBtn) resetStaticMapBtn.style.display = "none";
 
   currentID = TRIP_ORDER[0];
 
-  if (map.getLayer("flight-route"))
-    map.setLayoutProperty("flight-route", "visibility", "none");
-  if (map.getLayer("drive-route"))
-    map.setLayoutProperty("drive-route", "visibility", "none");
+  if (window.__MAP.getLayer("flight-route"))
+    window.__MAP.setLayoutProperty("flight-route","visibility","none");
+  if (window.__MAP.getLayer("drive-route"))
+    window.__MAP.setLayoutProperty("drive-route","visibility","none");
 
   ["journey-flight","journey-drive","journey-current"].forEach(id => {
-    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
-    const src = map.getSource(id);
-    if (src) src.setData(makeLineFeature([]));
+    if (window.__MAP.getLayer(id))
+      window.__MAP.setLayoutProperty(id, "visibility", "visible");
+    const src = window.__MAP.getSource(id);
+    if (src)
+      src.setData(makeLineFeature([]));
   });
 
   openPopupFor(currentID);
-
   const wp = getWP(currentID);
   if (!wp) {
     updateHUD();
@@ -698,34 +898,30 @@ function startJourney() {
   const START_FOCUS_DURATION = 2200;
 
   const isLaOrToronto = (currentID === "la" || currentID === "toronto");
-  const journeyZoom   = isLaOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
+  const journeyZoom = isLaOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
 
   stopOrbit();
 
-  map.easeTo({
+  window.__MAP.easeTo({
     center: wp.coords,
     zoom: 3.5,
     pitch: 0,
-    bearing: map.getBearing(),
+    bearing: window.__MAP.getBearing(),
     duration: START_PAN_DURATION,
     easing: t => t * t * (3 - 2 * t)
   });
 
   setTimeout(() => {
-    map.easeTo({
+    window.__MAP.easeTo({
       center: wp.coords,
       zoom: journeyZoom,
       pitch: JOURNEY_PITCH_TARGET,
-      bearing: map.getBearing(),
+      bearing: window.__MAP.getBearing(),
       duration: START_FOCUS_DURATION,
       easing: t => t * t * (3 - 2 * t)
     });
   }, START_PAN_DURATION);
 
-  if (orbitEnterTimer !== null) {
-    clearTimeout(orbitEnterTimer);
-    orbitEnterTimer = null;
-  }
   orbitEnterTimer = setTimeout(() => {
     orbitEnterTimer = null;
     startOrbit(currentID);
@@ -734,232 +930,43 @@ function startJourney() {
   updateHUD();
 }
 
-/* EXPORT SECTION 3 FUNCTIONS */
-window.animateLeg = animateLeg;
-window.undoTo = undoTo;
-window.resetJourney = resetJourney;
-window.startJourney = startJourney;
-window.makeLineFeature = makeLineFeature;
-
-
 /* ============================================================
-   MAP LOGIC MODULE — v2
-   SECTION 4 — ORBIT SYSTEM, HUD LOGIC, MAP INIT, EXPORTS
+   MAP LOAD — BOOTSTRAP ENTIRE SYSTEM
    ============================================================ */
 
-/* ============================================================
-   ORBIT CAMERA CONSTANTS
-   ============================================================ */
-
-const ORBIT_ZOOM_TARGET    = 12.5;
-const ORBIT_PITCH_TARGET   = 75;
-const ORBIT_ROTATION_SPEED = 0.03;
-const ORBIT_ENTRY_DURATION = 900;
-
-const JOURNEY_PITCH_TARGET = 55;
-const JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;
-const JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5;
-
-/* ============================================================
-   ORBIT CONTROL
-   ============================================================ */
-
-function stopOrbit() {
-  if (orbitEnterTimer !== null) {
-    clearTimeout(orbitEnterTimer);
-    orbitEnterTimer = null;
-  }
-  if (orbitAnimFrame !== null) {
-    cancelAnimationFrame(orbitAnimFrame);
-    orbitAnimFrame = null;
-  }
-  orbitTargetId = null;
-}
-
-function startOrbit(id) {
-  orbitTargetId = id;
-  orbitAnimFrame = requestAnimationFrame(orbitLoop);
-}
-
-function orbitLoop() {
-  if (!orbitTargetId) return;
-
-  const wp = getWP(orbitTargetId);
-  if (!wp) {
-    stopOrbit();
-    return;
-  }
-
-  const newBearing = map.getBearing() + ORBIT_ROTATION_SPEED;
-  map.setBearing(newBearing);
-
-  orbitAnimFrame = requestAnimationFrame(orbitLoop);
-}
-
-function focusWaypointOrbit(id) {
-  const wp = getWP(id);
-  if (!wp) return;
-
-  stopOrbit();
-
-  map.easeTo({
-    center: wp.coords,
-    zoom: ORBIT_ZOOM_TARGET,
-    pitch: ORBIT_PITCH_TARGET,
-    bearing: map.getBearing(),
-    duration: ORBIT_ENTRY_DURATION
-  });
-
-  orbitEnterTimer = setTimeout(() => {
-    orbitEnterTimer = null;
-    startOrbit(id);
-  }, ORBIT_ENTRY_DURATION);
-}
-
-function focusJourneyOrbit(id) {
-  const wp = getWP(id);
-  if (!wp) return;
-
-  stopOrbit();
-
-  const isLaOrToronto = (id === "la" || id === "toronto");
-  const journeyZoom   = isLaOrOrToronto ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
-
-  map.easeTo({
-    center: wp.coords,
-    zoom: journeyZoom,
-    pitch: JOURNEY_PITCH_TARGET,
-    bearing: map.getBearing(),
-    duration: ORBIT_ENTRY_DURATION
-  });
-
-  orbitEnterTimer = setTimeout(() => {
-    orbitEnterTimer = null;
-    startOrbit(id);
-  }, ORBIT_ENTRY_DURATION);
-}
-
-/* Disable orbit on real user actions */
-["mousedown","wheel","touchstart","dragstart"].forEach(ev => {
-  map.on(ev, () => stopOrbit());
-});
-
-/* ============================================================
-   HUD LOGIC (logic-only)
-   ============================================================ */
-
-const hud      = document.getElementById("journeyHud");
-const hudPrev  = document.getElementById("hudPrev");
-const hudNext  = document.getElementById("hudNext");
-const hudLabel = document.getElementById("hudLabel");
-
-function getZoom(id) {
-  if (["sydney", "la", "toronto"].includes(id)) return 6.7;
-  return 9.4;
-}
-
-function getLegMode(id) {
-  const idx  = TRIP_ORDER.indexOf(id);
-  const next = TRIP_ORDER[idx + 1];
-  if (next && isFlight(id, next)) return "Plane";
-  return getWP(id).mode;
-}
-
-function updateHUD() {
-  if (!journeyMode) {
-    hud.style.display = "none";
-    return;
-  }
-
-  hud.style.display = "block";
-
-  const idx  = TRIP_ORDER.indexOf(currentID);
-  const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
-  const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
-
-  hudPrev.disabled = !prev;
-
-  if (next) {
-    const d = LEG_DIST[currentID];
-    let distLabel = "";
-    if (d) distLabel = ` – ${d.mi}mi (${d.km}km)`;
-
-    hudNext.textContent = "Next Stop" + distLabel;
-    hudNext.disabled = false;
-  } else {
-    hudNext.textContent = "Next Stop";
-    hudNext.disabled = true;
-  }
-
-  if (next) {
-    const mode = getLegMode(currentID);
-    const icon = MODE_ICONS[mode];
-    const wp   = getWP(next);
-
-    hudLabel.innerHTML =
-      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(wp.location)} ` +
-      `<span class="hud-flag" style="background-image:url('${wp.meta.flag}')"></span>`;
-  } else {
-    hudLabel.textContent = "";
-  }
-}
-
-/* HUD event listeners */
-hudPrev.addEventListener("click", () => {
-  if (!journeyMode) return;
-  const idx = TRIP_ORDER.indexOf(currentID);
-  if (idx > 0) undoTo(TRIP_ORDER[idx - 1]);
-});
-
-hudNext.addEventListener("click", () => {
-  if (!journeyMode) return;
-  const idx = TRIP_ORDER.indexOf(currentID);
-  if (idx < TRIP_ORDER.length - 1) animateLeg(currentID, TRIP_ORDER[idx + 1]);
-});
-
-/* ============================================================
-   MAP LOAD INITIALIZER
-   ============================================================ */
-
-map.on("load", async () => {
+window.__MAP.on("load", async () => {
   initDistances();
 
-  /* These now come from style module, NOT duplicated */
-  await window.addNation("aus",
-    "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
-    "#1561CF", 0.12
-  );
-  await window.addNation("can",
-    "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json",
-    "#CE2424", 0.12
-  );
-  await window.addNation("usa",
-    "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json",
-    "#FFFFFF", 0.12
-  );
+  await addNation("aus","https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json","#1561CF",0.12);
+  await addNation("can","https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json","#CE2424",0.12);
+  await addNation("usa","https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json","#FFFFFF",0.12);
 
   addStaticRoutes();
   await buildDrivingRoute();
   addJourneySources();
-  window.buildMarkers();
+  buildMarkers();
 
   MAP_READY = true;
+
   spinGlobe();
 });
 
-/* Add journey polyline source placeholders */
+/* ============================================================
+   ADD EMPTY JOURNEY LAYERS
+   ============================================================ */
+
 function addJourneySources() {
   ["journey-flight","journey-drive","journey-current"].forEach(id => {
-    map.addSource(id, {
+    window.__MAP.addSource(id, {
       type: "geojson",
-      data: { type:"Feature", geometry:{ type:"LineString", coordinates: [] }}
+      data: makeLineFeature([])
     });
 
-    map.addLayer({
+    window.__MAP.addLayer({
       id,
       type: "line",
       source: id,
-      layout: { "visibility":"none", "line-cap":"round", "line-join":"round" },
+      layout: { "visibility": "none", "line-cap":"round", "line-join":"round" },
       paint: {
         "line-color": "#FF9C57",
         "line-width": 4,
@@ -968,23 +975,20 @@ function addJourneySources() {
     });
   });
 
-  map.setPaintProperty("journey-flight", "line-color", "#478ED3");
-  map.setPaintProperty("journey-flight", "line-dasharray", [3, 2]);
-  map.setPaintProperty("journey-flight", "line-width", 3);
+  window.__MAP.setPaintProperty("journey-flight", "line-color", "#478ED3");
+  window.__MAP.setPaintProperty("journey-flight", "line-dasharray", [3, 2]);
+  window.__MAP.setPaintProperty("journey-flight", "line-width", 3);
 }
 
 /* ============================================================
-   FINAL EXPORTS
+   EXPORT SECTION 5 (FINAL)
    ============================================================ */
 
-window.stopOrbit = stopOrbit;
-window.startOrbit = startOrbit;
-window.focusWaypointOrbit = focusWaypointOrbit;
-window.focusJourneyOrbit = focusJourneyOrbit;
-window.updateHUD = updateHUD;
-window.ORBIT_ZOOM_TARGET = ORBIT_ZOOM_TARGET;
-window.ORBIT_PITCH_TARGET = ORBIT_PITCH_TARGET;
-window.JOURNEY_PITCH_TARGET = JOURNEY_PITCH_TARGET;
-window.JOURNEY_ZOOM_DEFAULT = JOURNEY_ZOOM_DEFAULT;
-window.JOURNEY_ZOOM_LA = JOURNEY_ZOOM_LA;
+window.animateLeg = animateLeg;
+window.undoTo = undoTo;
+window.buildCompleteUntil = buildCompleteUntil;
+window.resetJourney = resetJourney;
+window.startJourney = startJourney;
 window.addJourneySources = addJourneySources;
+
+console.log("%cmap-logic.js (section 5) loaded — COMPLETE", "color:#00ff88;font-weight:bold;");
