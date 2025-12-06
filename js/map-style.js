@@ -14,7 +14,6 @@ mapboxgl.accessToken =
 
 /* ============================================================
    CREATE THE ONE AND ONLY MAP INSTANCE
-   (map-core.js and others MUST attach to window.__MAP)
 ============================================================ */
 
 const map = new mapboxgl.Map({
@@ -44,7 +43,6 @@ const FOG_STAR_INTENSITY = 0.65;
 map.on("style.load", () => {
   console.log("map-style.js: style.load fired");
 
-  // EXACT behavior from monolith — fog applied on style.load
   map.setFog({
     color: FOG_COLOR,
     "high-color": FOG_HIGH_COLOR,
@@ -55,11 +53,11 @@ map.on("style.load", () => {
 });
 
 /* ============================================================
-   NATION SHADING HELPERS (RUN ONLY WHEN CORE CALLS INITIALIZE)
+   NATION SHADING HELPERS
 ============================================================ */
 
 async function addNation(id, url, color, opacity) {
-  if (map.getSource(id)) return; // prevent duplicates
+  if (map.getSource(id)) return;
 
   try {
     const geo = await (await fetch(url)).json();
@@ -85,21 +83,127 @@ async function addNation(id, url, color, opacity) {
         "line-width": 1.1
       }
     });
-  } catch (err) {
-    console.error("Nation load failed:", err);
+  } catch (e) {
+    console.error("Nation load failed:", e);
   }
 }
 
 /* ============================================================
-   GLOBAL STYLE INITIALIZER
-   CALLED ONLY BY map-core.js — NOT AUTOMATICALLY HERE
+   JOURNEY + STATIC ROUTE SOURCES AND LAYERS
+   (REQUIRED BY map-logic.js AND UI)
+   EXACT 1:1 BEHAVIOR FROM MONOLITH
+============================================================ */
+
+map.on("load", () => {
+
+  /* ---------------- STATIC FLIGHT ROUTE ---------------- */
+  map.addSource("flight-route", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [] }
+    }
+  });
+
+  map.addLayer({
+    id: "flight-route",
+    type: "line",
+    source: "flight-route",
+    paint: {
+      "line-color": "#478ED3",
+      "line-width": 3,
+      "line-dasharray": [3, 2],
+      "line-opacity": 0.9
+    }
+  });
+
+  /* ---------------- STATIC DRIVING ROUTE ---------------- */
+  map.addSource("drive-route", {
+    type: "geojson",
+    data: {
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: [] }
+    }
+  });
+
+  map.addLayer({
+    id: "drive-route",
+    type: "line",
+    source: "drive-route",
+    paint: {
+      "line-color": "#FF9C57",
+      "line-width": 4,
+      "line-opacity": 0.95
+    }
+  });
+
+  /* ---------------- JOURNEY COMPLETED FLIGHT ---------------- */
+  map.addSource("journey-flight", {
+    type: "geojson",
+    data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } }
+  });
+
+  map.addLayer({
+    id: "journey-flight",
+    type: "line",
+    source: "journey-flight",
+    layout: { visibility: "none" },
+    paint: {
+      "line-color": "#478ED3",
+      "line-width": 3,
+      "line-dasharray": [3, 2],
+      "line-opacity": 0.9
+    }
+  });
+
+  /* ---------------- JOURNEY COMPLETED DRIVING ---------------- */
+  map.addSource("journey-drive", {
+    type: "geojson",
+    data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } }
+  });
+
+  map.addLayer({
+    id: "journey-drive",
+    type: "line",
+    source: "journey-drive",
+    layout: { visibility: "none" },
+    paint: {
+      "line-color": "#FF9C57",
+      "line-width": 4,
+      "line-opacity": 0.95
+    }
+  });
+
+  /* ---------------- JOURNEY CURRENT SEGMENT ---------------- */
+  map.addSource("journey-current", {
+    type: "geojson",
+    data: { type: "Feature", geometry: { type: "LineString", coordinates: [] } }
+  });
+
+  map.addLayer({
+    id: "journey-current",
+    type: "line",
+    source: "journey-current",
+    layout: { visibility: "none" },
+    paint: {
+      "line-color": "#FFFFFF",
+      "line-width": 4,
+      "line-opacity": 1.0
+    }
+  });
+
+  console.log("map-style.js: all journey + static layers created");
+});
+
+/* ============================================================
+   GLOBAL INITIALIZER
+   CALLED ONLY BY map-core.js
 ============================================================ */
 
 window.initializeStyleLayers = async function () {
 
   console.log("initializeStyleLayers() running…");
 
-  // NATION SHADING — exactly as monolith (but executed once by core)
   await addNation(
     "aus",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
