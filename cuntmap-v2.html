@@ -1,108 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <title>North America Trip – Donation Route (v2)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>North America Trip – Map v2</title>
+  <!-- Mapbox -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
-  <!-- MAPBOX CSS -->
-  <link
-    href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css"
-    rel="stylesheet"
-  />
-
-  <!-- CUSTOM CSS -->
-  <link rel="stylesheet" href="./css/map.css" />
-
-  <!-- FONTS (YOUR SLIMLINE UI STYLE) -->
-  <link
-    href="https://fonts.googleapis.com/css2?family=Gemunu+Libre:wght@300;400;600&display=swap"
-    rel="stylesheet"
-  />
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/map.css" />
 </head>
 
 <body>
-  <!-- ============================ -->
-  <!-- MAIN MAP CONTAINER           -->
-  <!-- ============================ -->
+
+  <!-- MAP ROOT -->
   <div id="map"></div>
 
-  <!-- ============================ -->
-  <!-- HUD OVERLAY (TOP LEFT)       -->
-  <!-- ============================ -->
-  <div id="hud-container">
-    <div id="hud-time" class="hud-block"></div>
-    <div id="hud-weather" class="hud-block"></div>
-    <div id="hud-currency" class="hud-block"></div>
+  <!-- OVERLAYS, SIDEBAR, HUD, POPUPS, LEGEND -->
+  <!-- These UI elements will be copied exactly from the original after modularization -->
+  <!-- Placeholder: -->
+  <div id="ui-container">
+    <!-- Full UI code will be inserted once modules are populated -->
   </div>
 
-  <!-- ============================ -->
-  <!-- JOURNEY CONTROLS             -->
-  <!-- ============================ -->
-  <div id="journey-controls">
-    <button id="btnPrev" class="journey-btn">◀ Prev</button>
-    <button id="btnNext" class="journey-btn">Next ▶</button>
-    <button id="btnSpin" class="journey-btn">🌐 Spin</button>
-    <button id="btnReset" class="journey-btn">Reset</button>
-  </div>
-
-  <!-- ============================ -->
-  <!-- SIDEBAR – DETAILS PANEL      -->
-  <!-- ============================ -->
-  <div id="sidebar" class="sidebar-closed">
-    <div id="sidebar-header">
-      <h2 id="sidebar-title"></h2>
-      <button id="sidebar-close">✕</button>
-    </div>
-
-    <div id="sidebar-content">
-      <p id="sidebar-description"></p>
-
-      <div class="sidebar-section">
-        <h3>Local Info</h3>
-        <div id="sidebar-local-time"></div>
-        <div id="sidebar-timezone"></div>
-        <div id="sidebar-weather"></div>
-        <div id="sidebar-currency"></div>
-      </div>
-
-      <div class="sidebar-section">
-        <h3>Nearby Amenities</h3>
-        <div id="amenities-container">
-          <!-- dynamically filled by map-logic.js -->
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================ -->
-  <!-- LEGEND                       -->
-  <!-- ============================ -->
-  <div id="legend-container">
-    <h3>Legend</h3>
-    <div class="legend-item">
-      <span class="legend-marker marker-major"></span> Major Waypoint
-    </div>
-    <div class="legend-item">
-      <span class="legend-marker marker-minor"></span> Minor Waypoint
-    </div>
-    <div class="legend-item">
-      <span class="legend-line flight-line"></span> Flight Route
-    </div>
-    <div class="legend-item">
-      <span class="legend-line road-line"></span> Road Route
-    </div>
-  </div>
-
-  <!-- ============================ -->
-  <!-- MODULE SCRIPTS               -->
-  <!-- ============================ -->
-  <script type="module" src="./js/map-config.js"></script>
-  <script type="module" src="./js/map-style.js"></script>
-  <script type="module" src="./js/map-data.js"></script>
-  <script type="module" src="./js/map-logic.js"></script>
-  <script type="module" src="./js/map-ui.js"></script>
+  <!-- JS MODULES -->
+  <script src="js/map-config.js"></script>
+  <script src="js/map-style.js"></script>
+  <script src="js/map-data.js"></script>
+  <script src="js/map-logic.js"></script>
+  <script src="js/map-ui.js"></script>
 
 </body>
 </html>
