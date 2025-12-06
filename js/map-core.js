@@ -1,158 +1,177 @@
-/* ==========================================================================
-   MAP CORE ORCHESTRATOR — FIXED & STABLE
-   ========================================================================== */
+/* ======================================================================= */
+/* ============================= MAP STYLE =============================== */
+/* ======================================================================= */
 
-console.log("%cmap-core.js loaded", "color:#00d0ff; font-weight:bold;");
+console.log("map-style.js loaded");
 
-/* ==========================================================================
-   REQUIRED GLOBALS — BUT DO NOT CHECK __MAP HERE
-   ========================================================================== */
+/* ======================================================================= */
+/*  IMPORTANT: THIS MODULE DOES NOT CREATE THE MAP INSTANCE                */
+/*  The map is created in map-logic.js and exposed as window.__MAP        */
+/* ======================================================================= */
 
-function requireGlobal(name) {
-    if (typeof window[name] === "undefined") {
-        console.error(`❌ map-core.js: Missing global ${name}`);
-        throw new Error(`Missing global: ${name}`);
-    }
+
+/* ======================================================================= */
+/*  GLOBE FOG + STARFIELD CONFIGURATION                                    */
+/* ======================================================================= */
+
+const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
+const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";
+const FOG_HORIZON_BLEND  = 0.45;
+const FOG_SPACE_COLOR    = "#02040A";
+const FOG_STAR_INTENSITY = 0.65;
+
+
+/* ======================================================================= */
+/*  TERRAIN (future activation)                                            */
+/* ======================================================================= */
+
+function enableTerrain() {
+    if (!window.__MAP) return;
+
+    // DEM source can be added later when approved
 }
 
-[
-    "WAYPOINTS",
-    "TRIP_ORDER",
-    "buildMarkers",
-    "updateHUD",
-    "initializeStyleLayers"
-].forEach(requireGlobal);
 
-/* ==========================================================================
-   WAIT FOR MAP INSTANCE (CREATED IN map-style.js)
-   ========================================================================== */
+/* ======================================================================= */
+/*  3D BUILDINGS (off by default)                                          */
+/* ======================================================================= */
 
-function waitForMap() {
-    return new Promise(resolve => {
-        if (window.__MAP) {
-            resolve(window.__MAP);
-            return;
+let buildingsEnabled = false;
+
+function enable3DBuildings() {
+    if (!window.__MAP || buildingsEnabled) return;
+    buildingsEnabled = true;
+
+    const map = window.__MAP;
+    const layers = map.getStyle().layers;
+    if (!layers) return;
+
+    let labelLayerId = null;
+    for (const layer of layers) {
+        if (layer.type === "symbol" && layer.layout["text-field"]) {
+            labelLayerId = layer.id;
+            break;
         }
+    }
 
-        const check = setInterval(() => {
-            if (window.__MAP) {
-                clearInterval(check);
-                resolve(window.__MAP);
+    map.addLayer(
+        {
+            id: "3d-buildings",
+            source: "composite",
+            "source-layer": "building",
+            type: "fill-extrusion",
+            minzoom: 14,
+            paint: {
+                "fill-extrusion-color": "#aaa",
+                "fill-extrusion-height": [
+                    "interpolate",
+                    ["linear"],
+                    ["zoom"],
+                    14, 0,
+                    15, ["get", "height"]
+                ],
+                "fill-extrusion-base": [
+                    "interpolate",
+                    ["linear"],
+                    ["zoom"],
+                    14, 0,
+                    15, ["get", "min_height"]
+                ],
+                "fill-extrusion-opacity": 0.6
             }
-        }, 10);
-    });
+        },
+        labelLayerId
+    );
 }
 
-/* ==========================================================================
-   MAIN ORCHESTRATION
-   ========================================================================== */
 
-waitForMap().then(map => {
+/* ======================================================================= */
+/* NATION SHADING — w/ DUPLICATE PROTECTION                                */
+/* ======================================================================= */
 
-    console.log("%cmap-core.js: Map instance detected", "color:#00ffaa;");
+async function addNation(id, url, color, opacity) {
+    const map = window.__MAP;
+    if (!map) return;
 
-    map.once("load", async () => {
-
-        console.log("%cmap-core.js: Map load event fired", "color:#00ffaa;");
-
-        /* ----------------------------------------------------------
-           1) STYLE LAYERS (fog, stars, nations)
-           ---------------------------------------------------------- */
-        try {
-            await initializeStyleLayers();
-        } catch (e) {
-            console.error("initializeStyleLayers() error:", e);
-        }
-
-        /* ----------------------------------------------------------
-           2) BUILD MARKERS
-           ---------------------------------------------------------- */
-        try {
-            buildMarkers();
-            console.log("✓ Markers built");
-        } catch (e) {
-            console.error("Marker build error:", e);
-        }
-
-        /* ----------------------------------------------------------
-           3) INITIAL HUD
-           ---------------------------------------------------------- */
-        try {
-            updateHUD();
-            console.log("✓ HUD initialized");
-        } catch (e) {
-            console.error("HUD init error:", e);
-        }
-
-        /* ----------------------------------------------------------
-           4) GLOBAL UI BINDINGS
-           ---------------------------------------------------------- */
-        try {
-            bindGlobalUI();
-        } catch (e) {
-            console.error("UI bind error:", e);
-        }
-
-        console.log("%cmap-core.js orchestration complete", "color:#00eaff;");
-    });
-});
-
-/* ==========================================================================
-   GLOBAL UI BINDINGS — unchanged except stabilized
-   ========================================================================== */
-
-function bindGlobalUI() {
-
-    console.log("✓ Binding global UI...");
-
-    /* Journey Start Button */
-    const startBtn = document.getElementById("startJourneyBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            window.journeyMode = true;
-            window.currentID = TRIP_ORDER[0];
-            openPopupFor(TRIP_ORDER[0]);
-            updateHUD();
-        });
+    if (map.getSource(id)) {
+        console.warn(`Nation source '${id}' already exists — skipping`);
+        return;
     }
 
-    /* Legend Toggle */
-    const legendToggle = document.getElementById("legendToggle");
-    const legendBox = document.getElementById("legendBox");
-    if (legendToggle && legendBox) {
-        legendToggle.addEventListener("click", () => {
-            legendBox.classList.toggle("collapsed");
-        });
-    }
+    try {
+        const res = await fetch(url);
+        const geo = await res.json();
 
-    /* HUD Prev/Next */
-    const hudPrev = document.getElementById("hudPrev");
-    const hudNext = document.getElementById("hudNext");
+        map.addSource(id, { type: "geojson", data: geo });
 
-    if (hudPrev) {
-        hudPrev.addEventListener("click", () => {
-            const idx = TRIP_ORDER.indexOf(window.currentID);
-            if (idx > 0) undoTo(TRIP_ORDER[idx - 1]);
-        });
-    }
-
-    if (hudNext) {
-        hudNext.addEventListener("click", () => {
-            const idx = TRIP_ORDER.indexOf(window.currentID);
-            if (idx < TRIP_ORDER.length - 1) animateLeg(window.currentID, TRIP_ORDER[idx + 1]);
-        });
-    }
-
-    /* Escape closes Details Panel */
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-            if (typeof closeDetailsSidebar === "function") {
-                closeDetailsSidebar();
+        map.addLayer({
+            id: id + "-fill",
+            type: "fill",
+            source: id,
+            paint: {
+                "fill-color": color,
+                "fill-opacity": opacity
             }
-        }
-    });
+        });
 
-    console.log("✓ Global UI fully bound");
+        map.addLayer({
+            id: id + "-outline",
+            type: "line",
+            source: id,
+            paint: {
+                "line-color": color,
+                "line-width": 1.2
+            }
+        });
+
+    } catch (err) {
+        console.error("Nation load error:", err);
+    }
 }
 
-console.log("%cmap-core.js fully loaded", "color:#00eaff; font-weight:bold;");
+
+/* ======================================================================= */
+/*  MAIN STYLE INITIALIZER — called ONLY by map-core.js after map.load     */
+/* ======================================================================= */
+
+window.initializeStyleLayers = async function () {
+    const map = window.__MAP;
+
+    if (!map) {
+        console.error("initializeStyleLayers() called before map exists");
+        return;
+    }
+
+    /* ---------------- Fog + Stars ---------------- */
+    map.setFog({
+        color: FOG_COLOR,
+        "high-color": FOG_HIGH_COLOR,
+        "horizon-blend": FOG_HORIZON_BLEND,
+        "space-color": FOG_SPACE_COLOR,
+        "star-intensity": FOG_STAR_INTENSITY
+    });
+
+    /* ---------------- Nation Shading ---------------- */
+    await addNation(
+        "aus",
+        "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
+        "#1561CF",
+        0.12
+    );
+
+    await addNation(
+        "can",
+        "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json",
+        "#CE2424",
+        0.12
+    );
+
+    await addNation(
+        "usa",
+        "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json",
+        "#FFFFFF",
+        0.12
+    );
+};
+
+console.log("%cmap-style.js fully loaded", "color:#00e5ff;font-weight:bold;");
