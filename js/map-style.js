@@ -12,7 +12,7 @@ mapboxgl.accessToken =
   "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
 /* ============================================================
-   CREATE THE ONE AND ONLY MAP INSTANCE — NO ROUTE LAYERS HERE
+   CREATE MAP INSTANCE
 ============================================================ */
 
 const map = new mapboxgl.Map({
@@ -30,7 +30,7 @@ window.__MAP = map;
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
 /* ============================================================
-   FOG + STARFIELD — SAME LOOK AS YOUR ORIGINAL MONOLITH
+   FOG + STARFIELD
 ============================================================ */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
@@ -49,11 +49,56 @@ map.on("style.load", () => {
     "space-color": FOG_SPACE_COLOR,
     "star-intensity": FOG_STAR_INTENSITY
   });
+
+  /* ========================================================
+     REQUIRED PLACEHOLDER LAYERS (EMPTY)
+     DO NOT DRAW ANYTHING — THEY MUST EXIST!
+  ======================================================== */
+
+  // --- STATIC FLIGHT ROUTE (EMPTY SHELL) ---
+  if (!map.getSource("flight-route")) {
+    map.addSource("flight-route", {
+      type: "geojson",
+      data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }}
+    });
+
+    map.addLayer({
+      id: "flight-route",
+      type: "line",
+      source: "flight-route",
+      paint: {
+        "line-color": "#478ED3",
+        "line-width": 3,
+        "line-dasharray": [3, 2],
+        "line-opacity": 0.9
+      }
+    });
+  }
+
+  // --- STATIC DRIVE ROUTE (EMPTY SHELL) ---
+  if (!map.getSource("drive-route")) {
+    map.addSource("drive-route", {
+      type: "geojson",
+      data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }}
+    });
+
+    map.addLayer({
+      id: "drive-route",
+      type: "line",
+      source: "drive-route",
+      paint: {
+        "line-color": "#FF9C57",
+        "line-width": 4,
+        "line-opacity": 0.95
+      }
+    });
+  }
+
+  console.log("map-style.js: placeholder route sources ready");
 });
 
 /* ============================================================
-   NATION SHADING (AUS / CAN / USA)
-   EXACT ORIGINAL COLORS + OPACITY
+   NATION SHADING
 ============================================================ */
 
 async function addNation(id, url, color, opacity) {
@@ -83,14 +128,14 @@ async function addNation(id, url, color, opacity) {
         "line-width": 1.1
       }
     });
+
   } catch (e) {
     console.error("Nation load failed:", e);
   }
 }
 
 /* ============================================================
-   STYLE INITIALIZER
-   (NO ROUTES. NO JOURNEY SOURCES. PURE STYLE ONLY.)
+   INITIALIZER CALLED BY map-core.js
 ============================================================ */
 
 window.initializeStyleLayers = async function () {
