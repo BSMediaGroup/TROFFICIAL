@@ -1,113 +1,207 @@
-// =======================================================
-// =============== MAP CONFIG & GLOBAL CONSTANTS =========
-// =======================================================
+/* ============================================================
+   MAPBOX CONFIG / CONSTANTS / GLOBAL HELPERS — v2
+   This module contains ONLY:
+   - Access token
+   - Base constants
+   - Utility functions (string escaping, haversine, rad↔deg, normalization, etc.)
+   - Shared mappings (mode icons, currencies)
+   NOTE:
+   No UI or map style logic belongs here.
+   No journey logic belongs here.
+   ============================================================ */
 
-// -------------------------------------
-// MAPBOX TOKEN
-// -------------------------------------
-export const MAPBOX_TOKEN =
-  "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw"; // <-- replace with your real token
+/* ========================= ACCESS TOKEN ========================= */
+mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
+/* ========================= GLOBAL CONSTANTS ========================= */
 
-// -------------------------------------
-// MAP INITIAL SETTINGS
-// -------------------------------------
-export const DEFAULT_CENTER = [151.177222, -33.946111]; // Sydney Airport
-export const DEFAULT_ZOOM = 1.6;
-export const DEFAULT_PITCH = 0;
-export const DEFAULT_BEARING = 0;
+const DEFAULT_CENTER = [245, 20];   // Australia visible
+const DEFAULT_ZOOM   = 2.8;
 
+let spinning        = true;
+let userInterrupted = false;
+let journeyMode     = false;
+let currentID       = null;
+let MAP_READY       = false;
 
-// -------------------------------------
-// WAYPOINT VISIBILITY THRESHOLDS
-// -------------------------------------
-// These are imported by map-logic.js when deciding how/when to
-// show minor vs major waypoints. Major ones ignore zoom.
-export const MINOR_WAYPOINT_MIN_ZOOM = 3.2;
+/* Orbit globals used everywhere */
+let orbitingId      = null;
+let orbitAnim       = null;
+let orbitEnterTimer = null;
 
+/* Set of markers always visible regardless of zoom */
+const ALWAYS_VISIBLE = new Set(["sydney", "toronto", "tomsriver"]);
 
-// -------------------------------------
-// ANIMATION SETTINGS
-// -------------------------------------
-export const SPIN_ENABLED_START = true;
-export const SPIN_SPEED = 0.07; // globe idle rotation speed
-export const ORBIT_SPEED = 0.45; // camera orbit during flight legs
-export const FLIGHT_DURATION = 5500; // camera flyTo between waypoints (ms)
-
-
-// -------------------------------------
-// LIGHTING PRESETS BEHAVIOUR
-// -------------------------------------
-// We set the default "zoomed out" vibe as NIGHT for the dark theme.
-// When focusing a waypoint, map-style.js will call a function in map-logic
-// that picks the appropriate preset based on its local time.
-export const IDLE_LIGHT_PRESET = "night";
-
-export const LIGHT_PRESETS = {
-  dawn: "dawn",
-  day: "day",
-  dusk: "dusk",
-  night: "night",
+/* Icons for travel modes */
+const MODE_ICONS = {
+  Plane: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
+  Car:   "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/car1.svg"
 };
 
+/* Legend toggle icons */
+const LEGEND_EXPAND_ICON =
+  "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/expand.svg";
+const LEGEND_COLLAPSE_ICON =
+  "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/collapse.svg";
 
-// -------------------------------------
-// SECTION: AMENITIES SEARCH CONFIG
-// -------------------------------------
-// We avoid clutter by only fetching a limited set of POI categories.
-// These are used in map-logic.js.
-export const AMENITY_CATEGORIES = {
-  hotels: ["lodging"],
-  toilets: ["restroom", "toilet"],
-  attractions: ["tourist_attraction", "park"],
-};
+/* Orbit & camera config */
+const ORBIT_ZOOM_TARGET    = 12.5;
+const ORBIT_PITCH_TARGET   = 75;
+const ORBIT_ROTATION_SPEED = 0.03;
+const ORBIT_ENTRY_DURATION = 900;
 
-// radius in meters for nearby POI search
-export const AMENITY_SEARCH_RADIUS = 3500;
+const JOURNEY_PITCH_TARGET = 55;
+const JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;
+const JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5;
 
-// how many amenities to show in the sidebar list
-export const AMENITY_RESULT_LIMIT = 6;
-
-
-// -------------------------------------
-// GLOBAL STATE (MUTABLE)
-// -------------------------------------
-export let globalState = {
-  spinning: SPIN_ENABLED_START,
-  currentWaypointIndex: 0,
-  isJourneyMode: false,
-  mapInstance: null,
-};
-
-// STATE MUTATORS (used by modules)
-export function setMapInstance(map) {
-  globalState.mapInstance = map;
+/* ============================================
+   UTILITY: SAFE STRING ESCAPE
+   ============================================ */
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-export function setSpinning(v) {
-  globalState.spinning = v;
+/* ============================================
+   UTILITY: NORMALIZE COORDINATE
+   Keeps lon within [-180,180], clamps latitude
+   ============================================ */
+function normalizeCoord(lon, lat) {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+
+  lon = ((lon + 180) % 360 + 360) % 360 - 180;
+  lat = Math.max(-89.999999, Math.min(89.999999, lat));
+
+  return [lon, lat];
 }
 
-export function setCurrentWaypointIndex(i) {
-  globalState.currentWaypointIndex = i;
+/* ============================================
+   UTILITY: DEG ↔ RAD
+   ============================================ */
+function toRad(deg) { return deg * Math.PI / 180; }
+function toDeg(rad) { return rad * 180 / Math.PI; }
+
+/* ============================================
+   HAVERSINE DISTANCE (km)
+   Identical to original implementation
+   ============================================ */
+function haversine(a, b) {
+  const R = 6371;
+  const toR = d => d * Math.PI / 180;
+
+  const dLat = toR(b[1] - a[1]);
+  const dLon = toR(b[0] - a[0]);
+  const lat1 = toR(a[1]);
+  const lat2 = toR(b[1]);
+
+  const h = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export function setJourneyMode(v) {
-  globalState.isJourneyMode = v;
+/* ============================================
+   CURRENCY MAP
+   Identical to original behaviour
+   ============================================ */
+function getCurrencyInfo(countryCode) {
+  const map = {
+    "AU": { code: "AUD", name: "Australian Dollar",      symbol: "A$" },
+    "US": { code: "USD", name: "United States Dollar",   symbol: "US$" },
+    "CA": { code: "CAD", name: "Canadian Dollar",        symbol: "CA$" }
+  };
+  return map[countryCode] || { code: "—", name: "Unknown currency", symbol: "?" };
 }
 
+/* ============================================
+   LOCAL TIME FORMATTER
+   ============================================ */
+function formatLocalTime(wp) {
+  const tz     = wp.meta?.timezone;
+  const locale = wp.meta?.locale || "en-US";
 
-// -------------------------------------
-// SECTION: TIME → LIGHT PRESET LOGIC
-// -------------------------------------
-// Given a JS Date object with correct TZ applied,
-// we choose the appropriate Standard lighting preset.
-export function computeLightPresetFromLocalTime(localDate) {
-  const hour = localDate.getHours();
+  if (!tz) return "Time unavailable";
 
-  if (hour >= 5 && hour < 7) return LIGHT_PRESETS.dawn;
-  if (hour >= 7 && hour < 18) return LIGHT_PRESETS.day;
-  if (hour >= 18 && hour < 21) return LIGHT_PRESETS.dusk;
+  try {
+    const now = new Date();
 
-  return LIGHT_PRESETS.night;
+    const weekday = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      weekday: "long"
+    }).format(now);
+
+    const time12h = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).format(now);
+
+    return `${weekday}, ${time12h}`;
+  } catch {
+    return "Time unavailable";
+  }
 }
+
+/* ============================================
+   TIMEZONE + UTC OFFSET FORMATTER
+   ============================================ */
+function formatTimeZoneWithOffset(wp) {
+  const tz     = wp.meta?.timezone;
+  const locale = wp.meta?.locale || "en-US";
+
+  if (!tz) return "N/A";
+
+  try {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "shortOffset"
+    });
+
+    const parts = fmt.formatToParts(now);
+    let offset = parts.find(p => p.type === "timeZoneName")?.value || "";
+
+    if (offset.startsWith("GMT")) offset = "UTC" + offset.slice(3);
+
+    return `${tz} (${offset})`;
+  } catch {
+    return tz;
+  }
+}
+
+/* ============================================
+   WEATHER CODE → LABEL + ICON
+   Direct from original implementation
+   ============================================ */
+function mapWeatherCodeToInfo(code) {
+  const c = Number(code);
+  if (isNaN(c)) return { label: "Unknown conditions", icon: "?" };
+
+  if (c === 0) return { label: "Clear sky", icon: "☀️" };
+  if (c === 1 || c === 2) return { label: "Mostly clear", icon: "🌤️" };
+  if (c === 3) return { label: "Overcast", icon: "☁️" };
+  if (c === 45 || c === 48) return { label: "Fog / low clouds", icon: "🌫️" };
+  if (c >= 51 && c <= 55) return { label: "Drizzle", icon: "🌦️" };
+  if (c >= 61 && c <= 65) return { label: "Rain", icon: "🌧️" };
+  if (c === 66 || c === 67) return { label: "Freezing rain", icon: "🌧️" };
+  if (c >= 71 && c <= 75) return { label: "Snow", icon: "🌨️" };
+  if (c === 77) return { label: "Snow grains", icon: "❄️" };
+  if (c >= 80 && c <= 82) return { label: "Rain showers", icon: "🌦️" };
+  if (c === 85 || c === 86) return { label: "Snow showers", icon: "🌨️" };
+  if (c === 95) return { label: "Thunderstorm", icon: "⛈️" };
+  if (c === 96 || c === 99) return { label: "Thunderstorm with hail", icon: "⛈️" };
+
+  return { label: "Conditions unknown", icon: "?" };
+}
+
+/* ============================================
+   EXPORT-SAFE GLOBALS (if future ES modules)
+   ============================================ */
+console.log("map-config.js loaded");
