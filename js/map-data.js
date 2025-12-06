@@ -742,5 +742,14 @@ const TRIP_ORDER = WAYPOINTS.map(w => w.id);
    ========================================================================== */
 const DRIVE_ORDER = TRIP_ORDER.slice(TRIP_ORDER.indexOf("toronto"));
 
+// ==========================================================================
+// EXPORT CORE DATA TO GLOBAL FOR map-core.js
+// ==========================================================================
+window.WAYPOINTS   = WAYPOINTS;
+window.TRIP_ORDER  = TRIP_ORDER;
+window.DRIVE_ORDER = DRIVE_ORDER;
+
+
 console.log("%cmap-data.js fully loaded", "color:#00ff88;font-weight:bold;");
+
 
