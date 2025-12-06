@@ -122,7 +122,7 @@ const WAYPOINTS = [
 /* ============================== TORONTO =============================== */
 {
   id: "toronto",
-  role: "arrival",
+  role: "toronto",
   mode: "Car",
   coords: [-79.62726381614229, 43.680452176904645],
 
@@ -743,3 +743,4 @@ const TRIP_ORDER = WAYPOINTS.map(w => w.id);
 const DRIVE_ORDER = TRIP_ORDER.slice(TRIP_ORDER.indexOf("toronto"));
 
 console.log("%cmap-data.js fully loaded", "color:#00ff88;font-weight:bold;");
+
