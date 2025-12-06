@@ -556,6 +556,10 @@ function openDetailsSidebar(id) {
 
   updateDetailsHud();
 
+  // NEW
+  fetchPOIs(id);
+
+  // show sidebar
   detailsSidebar.classList.add("open");
   if (detailsOverlay) detailsOverlay.classList.add("open");
 }
@@ -879,3 +883,4 @@ window.UI = {
 };
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
