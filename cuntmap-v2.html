@@ -2,35 +2,201 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>North America Trip – Donation Route (v2)</title>
+  <title>Cuntent Creator Map (v2)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Mapbox -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="css/map.css" />
+  <!-- Turf (harmless to keep even if not used) -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <!-- Main CSS -->
+  <link rel="stylesheet" href="css/map.css">
 </head>
 
 <body>
 
-  <!-- MAP ROOT -->
-  <div id="map"></div>
+<!-- ============================================================
+     MAP CONTAINER
+============================================================ -->
+<div id="map"></div>
 
-  <!-- OVERLAYS, SIDEBAR, HUD, POPUPS, LEGEND -->
-  <!-- These UI elements will be copied exactly from the original after modularization -->
-  <!-- Placeholder: -->
-  <div id="ui-container">
-    <!-- Full UI code will be inserted once modules are populated -->
+
+<!-- ============================================================
+     OVERLAY / LEGEND PANEL
+============================================================ -->
+<div class="trip-overlay">
+  <div class="trip-overlay-title">Cuntent Creator Map</div>
+
+  <div id="legendContainer">
+    <div class="trip-overlay-subtitle">
+      Sydney → L.A. → Toronto flights, then road trip via Buffalo, NYC & Hoboken to Toms River.
+    </div>
+
+    <div class="trip-legend-row">
+      <span class="legend-line" style="border-top:2px dashed #478ED3"></span> Flights
+    </div>
+    <div class="trip-legend-row">
+      <span class="legend-line" style="border-top:2px solid #FF9C57"></span> Driving Route
+    </div>
+
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg"> Departure
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg"> Final Destination
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg"> Arrival / Toronto
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg"> Major Waypoints
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"> Minor Waypoints
+    </div>
+
+    <div id="legendTotalDistance">Total Distance: calculating…</div>
   </div>
 
-  <!-- JS MODULES -->
-  <script src="js/map-config.js"></script>
-  <script src="js/map-style.js"></script>
-  <script src="js/map-data.js"></script>
-  <script src="js/map-logic.js"></script>
-  <script src="js/map-ui.js"></script>
+  <button id="journeyToggle" class="trip-journey-btn">Start Journey</button>
+  <button id="resetStaticMap">Reset Map</button>
+
+  <button id="legendToggle" class="legend-toggle-btn" type="button">
+    <img
+      id="legendToggleIcon"
+      src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/collapse.svg"
+      alt="Toggle legend">
+    <span id="legendToggleLabel" class="legend-toggle-label">COLLAPSE</span>
+  </button>
+</div>
+
+
+<!-- ============================================================
+     JOURNEY HUD (BOTTOM OVERLAY)
+============================================================ -->
+<div id="journeyHud" class="journey-hud">
+  <div class="journey-hud-buttons">
+    <button id="hudPrev" class="journey-hud-btn">GO BACK</button>
+    <button id="hudNext" class="journey-hud-btn">Next Stop</button>
+  </div>
+  <div id="hudLabel" class="journey-hud-label"></div>
+</div>
+
+
+<!-- ============================================================
+     DETAILS SIDEBAR + OVERLAY
+============================================================ -->
+<div id="detailsOverlay" class="details-overlay"></div>
+
+<div id="detailsSidebar" class="details-sidebar">
+  <div class="details-sidebar-content">
+
+    <!-- Header: Main image + Close button -->
+    <div class="details-sidebar-header">
+      <img id="detailsSidebarImage" class="details-sidebar-image" src="" alt="">
+      <button id="detailsSidebarClose" class="details-sidebar-close">×</button>
+    </div>
+
+    <div class="details-sidebar-body">
+
+      <!-- Title Row -->
+      <div class="details-sidebar-title-row">
+        <img id="detailsSidebarIcon" class="details-sidebar-title-icon" src="" alt="">
+        <h2 id="detailsSidebarTitle" class="details-sidebar-title"></h2>
+      </div>
+
+      <!-- Location Line -->
+      <div id="detailsSidebarLocation" class="details-sidebar-location"></div>
+
+      <!-- Description -->
+      <div id="detailsSidebarDescription" class="details-sidebar-description"></div>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- Start Journey Button (shown when not in journey mode) -->
+      <button id="detailsSidebarStartJourney"
+              class="details-sidebar-hud-btn"
+              style="display:none; margin-bottom:16px; width:100%;">
+        Start Journey
+      </button>
+
+      <!-- Sidebar HUD -->
+      <div id="detailsSidebarHud" class="details-sidebar-hud">
+        <div class="details-sidebar-hud-buttons">
+          <button id="detailsHudPrev" class="details-sidebar-hud-btn">GO BACK</button>
+          <button id="detailsHudNext" class="details-sidebar-hud-btn">Next Stop</button>
+        </div>
+        <div id="detailsHudLabel" class="details-sidebar-hud-label"></div>
+      </div>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- LOCATION INFO -->
+      <section id="detailsLocationInfo" class="details-section">
+        <div class="details-section-title">Location Info</div>
+        <div id="detailsLocationInfoBody" class="details-location-grid"></div>
+      </section>
+
+      <!-- WEATHER -->
+      <section id="detailsWeather" class="details-section">
+        <div class="details-section-title">Live Weather</div>
+        <div id="detailsWeatherContent" class="details-weather-body"></div>
+      </section>
+
+      <!-- DISTANCE -->
+      <section id="detailsDistance" class="details-section">
+        <div class="details-section-title">Route Distance</div>
+        <div id="detailsDistanceContent" class="details-distance-body"></div>
+      </section>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- Explore Links (existing system) -->
+      <div class="details-sidebar-links">
+        <a id="detailsSidebarTourist"  class="details-sidebar-link" target="_blank">Tourist Places</a>
+        <a id="detailsSidebarToilets"  class="details-sidebar-link" target="_blank">Toilets</a>
+        <a id="detailsSidebarHotels"   class="details-sidebar-link" target="_blank">Hotels</a>
+      </div>
+
+      <!-- Future Content Placeholder -->
+      <div id="detailsSidebarFuture" class="details-sidebar-future">
+        Future content for this waypoint will appear here.
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ============================================================
+     SCRIPT MODULE LOADING (ORDER IS CRITICAL)
+============================================================ -->
+<script>
+  /* Global Map instance created BEFORE loading modules */
+  mapboxgl.accessToken = "YOUR_MAPBOX_TOKEN_HERE";
+  window.__MAP = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/dark-v11",
+    center: [-100, 40],
+    zoom: 1.65,
+    pitch: 0,
+    renderWorldCopies: false,
+    projection: "globe"
+  });
+
+  /* Navigation */
+  window.__MAP.addControl(new mapboxgl.NavigationControl({showCompass:false}));
+</script>
+
+<script src="js/map-style.js"></script>
+<script src="js/map-config.js"></script>
+<script src="js/map-data.js"></script>
+<script src="js/map-logic.js"></script>
+<script src="js/map-ui.js"></script>
 
 </body>
 </html>
