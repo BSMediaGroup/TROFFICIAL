@@ -195,7 +195,7 @@
 ============================================================ -->
 <script>
   /* Global Map instance created BEFORE loading modules */
-  mapboxgl.accessToken = "YOUR_MAPBOX_TOKEN_HERE";
+  mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
   window.__MAP = new mapboxgl.Map({
     container: "map",
     style: "mapbox://styles/mapbox/dark-v11",
@@ -210,12 +210,13 @@
   window.__MAP.addControl(new mapboxgl.NavigationControl({showCompass:false}));
 </script>
 
-<script src="js/map-style.js"></script>
 <script src="js/map-config.js"></script>
+<script src="js/map-style.js"></script>
 <script src="js/map-data.js"></script>
 <script src="js/map-logic.js"></script>
 <script src="js/map-ui.js"></script>
 
 </body>
 </html>
+
 
