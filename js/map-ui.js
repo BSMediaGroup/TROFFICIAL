@@ -2,16 +2,14 @@
    SHARED HTML ESCAPE HELPER
    ============================================================ */
 
-if (typeof window.escapeHTML !== "function") {
-  window.escapeHTML = function escapeHTML(str) {
-    if (str == null) return "";
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  };
+function escapeHTML(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /* ============================================================
@@ -20,6 +18,7 @@ if (typeof window.escapeHTML !== "function") {
    ============================================================ */
 
 console.log("map-ui.js loaded");
+
 
 /* ============================================================
    MAP UI MODULE — CLEAN FULL REBUILD (EXPORT STYLE A)
@@ -148,14 +147,18 @@ function buildPopupHTML(w) {
 
   const mode = getLegMode(w.id);
 
+  const nameDisplay = w.names && w.names.display ? w.names.display : w.id;
+  const locLabel = w.location || "";
+  const flagUrl = (w.meta && w.meta.flag) ? w.meta.flag : "";
+
   let navHTML = "";
 
   /* Previous */
   if (prev) {
     navHTML += `
-        <span class="trip-popup-nav-link" data-dir="prev" data-target="${prev}">
-            Go Back
-        </span>`;
+      <span class="trip-popup-nav-link" data-dir="prev" data-target="${prev}">
+        Go Back
+      </span>`;
   }
 
   /* Next */
@@ -166,54 +169,54 @@ function buildPopupHTML(w) {
       : "";
 
     navHTML += `
-        <span class="trip-popup-nav-link" data-dir="next" data-target="${next}">
-            <img src="${getModeIcon(mode)}" class="trip-popup-mode-icon">
-            Next Stop${label}
-        </span>`;
+      <span class="trip-popup-nav-link" data-dir="next" data-target="${next}">
+        <img src="${getModeIcon(mode)}" class="trip-popup-mode-icon">
+        Next Stop${label}
+      </span>`;
   }
 
   /* Details */
   navHTML += `
     <span class="trip-popup-nav-link details-btn" data-details="${w.id}">
-        <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/exp.svg"
-             class="trip-popup-mode-icon">
-        Details
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/exp.svg"
+           class="trip-popup-mode-icon">
+      Details
     </span>`;
 
   /* Reset on final */
   if (w.id === "tomsriver") {
     navHTML += `
-        <span class="trip-popup-nav-link" data-reset="1">
-            Reset Map
-        </span>`;
+      <span class="trip-popup-nav-link" data-reset="1">
+        Reset Map
+      </span>`;
   }
 
   return `
     <div class="trip-popup">
-        <div class="trip-popup-title">
-            <img src="${w.icon}" class="trip-popup-title-icon">
-            <span>${window.escapeHTML(w.names.display)}</span>
-        </div>
+      <div class="trip-popup-title">
+        <img src="${w.icon}" class="trip-popup-title-icon">
+        <span>${escapeHTML(nameDisplay)}</span>
+      </div>
 
-        <div class="trip-popup-location">
-            <span>${window.escapeHTML(w.location)}</span>
-            <span class="trip-popup-flag" style="background-image:url('${w.meta.flag}')"></span>
-        </div>
+      <div class="trip-popup-location">
+        <span>${escapeHTML(locLabel)}</span>
+        <span class="trip-popup-flag" style="background-image:url('${flagUrl}')"></span>
+      </div>
 
-        <div class="trip-popup-body">
-            ${window.escapeHTML(w.description)}
-        </div>
+      <div class="trip-popup-body">
+        ${escapeHTML(w.description || "")}
+      </div>
 
-        <div class="trip-popup-travelled">
-            Travelled: ${tMi} / ${totalMi}mi
-            <span style="color:#A3A3A3">(${tKm} / ${totalKm}km)</span>
-        </div>
+      <div class="trip-popup-travelled">
+        Travelled: ${tMi} / ${totalMi}mi
+        <span style="color:#A3A3A3">(${tKm} / ${totalKm}km)</span>
+      </div>
 
-        <div class="trip-popup-divider"></div>
+      <div class="trip-popup-divider"></div>
 
-        <div class="trip-popup-nav">
-            ${navHTML}
-        </div>
+      <div class="trip-popup-nav">
+        ${navHTML}
+      </div>
     </div>`;
 }
 
@@ -307,25 +310,33 @@ const detailsClose = document.getElementById("detailsSidebarClose");
 function renderLocationInfo(wp) {
   if (!detailsLocationInfoBody) return;
 
-  const flagUrl = wp.meta.flag;
+  const names = wp.names || {};
+  const flagUrl = (wp.meta && wp.meta.flag) ? wp.meta.flag : "";
+  const city = names.city || "";
+  const state = names.state || "";
+  const country = names.country || "";
+
+  const flagImg = flagUrl
+    ? `<img src="${flagUrl}" style="width:20px;height:14px;border-radius:2px;border:1px solid #fff;">`
+    : "";
 
   detailsLocationInfoBody.innerHTML = `
     <div class="details-location-row">
-        <div class="details-kv-label">City</div>
-        <div class="details-kv-value">${window.escapeHTML(wp.names.city)}</div>
+      <div class="details-kv-label">City</div>
+      <div class="details-kv-value">${escapeHTML(city)}</div>
     </div>
 
     <div class="details-location-row">
-        <div class="details-kv-label">State / Province</div>
-        <div class="details-kv-value">${window.escapeHTML(wp.names.state)}</div>
+      <div class="details-kv-label">State / Province</div>
+      <div class="details-kv-value">${escapeHTML(state)}</div>
     </div>
 
     <div class="details-location-row">
-        <div class="details-kv-label">Country</div>
-        <div class="details-kv-value" style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
-            <img src="${flagUrl}" style="width:20px;height:14px;border-radius:2px;border:1px solid #fff;">
-            ${window.escapeHTML(wp.names.country)}
-        </div>
+      <div class="details-kv-label">Country</div>
+      <div class="details-kv-value" style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+        ${flagImg}
+        ${escapeHTML(country)}
+      </div>
     </div>`;
 }
 
@@ -337,7 +348,15 @@ function renderWeather(wp) {
   detailsWeatherContent.innerHTML =
     `<div class="details-weather-status">Loading current weather…</div>`;
 
-  const [lon, lat] = wp.coords;
+  const coords = wp.coords || [];
+  const lon = coords[0];
+  const lat = coords[1];
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    detailsWeatherContent.innerHTML =
+      `<div class="details-weather-error">Weather unavailable.</div>`;
+    return;
+  }
 
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
@@ -356,12 +375,12 @@ function renderWeather(wp) {
       const tempF = +(tempC * 9 / 5 + 32).toFixed(1);
 
       detailsWeatherContent.innerHTML = `
-            <div class="details-weather-main">
-                <div class="details-weather-icon">☀️</div>
-                <div class="details-weather-temp">
-                    ${tempF}°F <span style="color:#A3A3A3">(${tempC}°C)</span>
-                </div>
-            </div>`;
+        <div class="details-weather-main">
+          <div class="details-weather-icon">☀️</div>
+          <div class="details-weather-temp">
+            ${tempF}°F <span style="color:#A3A3A3">(${tempC}°C)</span>
+          </div>
+        </div>`;
     })
     .catch(() => {
       if (detailsSidebar.dataset.currentId !== requestId) return;
@@ -388,11 +407,11 @@ function renderDistance(wp) {
 
     if (legPrev) {
       html = `
-            <div>
-                Distance from previous stop:<br>
-                <strong style="color:#FFA50D">${legPrev.mi} mi</strong>
-                <span style="color:#A3A3A3">(${legPrev.km} km)</span>
-            </div>`;
+        <div>
+          Distance from previous stop:<br>
+          <strong style="color:#FFA50D">${legPrev.mi} mi</strong>
+          <span style="color:#A3A3A3">(${legPrev.km} km)</span>
+        </div>`;
     }
   }
 
@@ -404,10 +423,10 @@ function renderDistance(wp) {
     const legNext = LEG_DIST[wp.id];
     if (legNext) {
       html += `
-            <div>
-                <strong style="color:#FFA50D">${legNext.mi} mi</strong>
-                <span style="color:#A3A3A3">(${legNext.km} km)</span>
-            </div>`;
+        <div>
+          <strong style="color:#FFA50D">${legNext.mi} mi</strong>
+          <span style="color:#A3A3A3">(${legNext.km} km)</span>
+        </div>`;
     }
   }
 
@@ -420,7 +439,7 @@ function renderDistance(wp) {
 
 function updateDetailsHud() {
   const btnStart = document.getElementById("detailsSidebarStartJourney");
-  if (!btnStart) return;
+  if (!btnStart || !detailsSidebarHud) return;
 
   if (!journeyMode || !currentID) {
     detailsSidebarHud.style.display = "none";
@@ -458,8 +477,8 @@ function updateDetailsHud() {
 
       detailsHudLabel.innerHTML =
         `Next Stop: <img src="${getModeIcon(mode)}" class="details-sidebar-hud-mode-icon"> ` +
-        `${window.escapeHTML(wpNext.location)} ` +
-        `<span class="details-sidebar-hud-flag" style="background-image:url('${wpNext.meta.flag}')"></span>`;
+        `${escapeHTML(wpNext.location || "")} ` +
+        `<span class="details-sidebar-hud-flag" style="background-image:url('${(wpNext.meta && wpNext.meta.flag) || ""}')"></span>`;
     }
   }
 }
@@ -472,23 +491,29 @@ function openDetailsSidebar(id) {
   const wp = WAYPOINTS.find(x => x.id === id);
   if (!wp) return;
 
+  const names = wp.names || {};
+  const flagUrl = (wp.meta && wp.meta.flag) ? wp.meta.flag : "";
+
   detailsSidebar.dataset.currentId = wp.id;
 
-  detailsTitle.textContent = wp.names.display;
-  detailsIcon.src = wp.icon;
+  detailsTitle.textContent = names.display || "Unknown Location";
+  detailsIcon.src = wp.icon || "";
+  detailsIcon.alt = names.display || "Waypoint icon";
+
   detailsLocation.innerHTML =
     `<span class="details-location-header-line">
-            ${window.escapeHTML(wp.location)}
-            <span class="details-location-flag-inline"
-                  style="background-image:url('${wp.meta.flag}')"></span>
-        </span>`;
+      ${escapeHTML(wp.location || "")}
+      <span class="details-location-flag-inline"
+            style="background-image:url('${flagUrl}')"></span>
+    </span>`;
 
-  detailsDescription.textContent = wp.description;
-  detailsImage.src = wp.image;
+  detailsDescription.textContent = wp.description || "";
+  detailsImage.src = wp.image || "";
+  detailsImage.alt = names.display || "Waypoint image";
 
-  detailsTourist.href = wp.links.search;
-  detailsToilets.href = wp.links.toilets;
-  detailsHotels.href = wp.links.hotels;
+  detailsTourist.href = (wp.links && wp.links.search) || "#";
+  detailsToilets.href = (wp.links && wp.links.toilets) || "#";
+  detailsHotels.href = (wp.links && wp.links.hotels) || "#";
 
   renderLocationInfo(wp);
   renderWeather(wp);
@@ -506,8 +531,36 @@ function closeDetailsSidebar() {
 }
 
 /* Close buttons */
-detailsClose.addEventListener("click", closeDetailsSidebar);
-detailsOverlay.addEventListener("click", closeDetailsSidebar);
+if (detailsClose) detailsClose.addEventListener("click", closeDetailsSidebar);
+if (detailsOverlay) detailsOverlay.addEventListener("click", closeDetailsSidebar);
+
+/* Close sidebar if clicking outside it but not on details button */
+document.addEventListener("click", e => {
+  if (!detailsSidebar.classList.contains("open")) return;
+
+  if (e.target.closest(".details-btn")) return;
+  if (detailsSidebar.contains(e.target)) return;
+
+  closeDetailsSidebar();
+});
+
+/* ESC key closes the sidebar */
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && detailsSidebar.classList.contains("open")) {
+    closeDetailsSidebar();
+  }
+});
+
+/* “Details” buttons inside popups */
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".details-btn");
+  if (!btn) return;
+
+  const id = btn.dataset.details;
+  if (!id) return;
+
+  openDetailsSidebar(id);
+});
 
 /* ========================================================================== */
 /* MAIN HUD (TOP SCREEN)                                                      */
@@ -551,10 +604,12 @@ function updateHUD() {
     const wp = getWP(next);
     const mode = getLegMode(currentID);
 
+    const flagUrl = (wp.meta && wp.meta.flag) ? wp.meta.flag : "";
+
     hudLabel.innerHTML =
       `Next Stop: <img src="${getModeIcon(mode)}" class="hud-mode-icon"> ` +
-      `${window.escapeHTML(wp.location)} ` +
-      `<span class="hud-flag" style="background-image:url('${wp.meta.flag}')"></span>`;
+      `${escapeHTML(wp.location || "")} ` +
+      `<span class="hud-flag" style="background-image:url('${flagUrl}')"></span>`;
   } else {
     hudLabel.textContent = "";
   }
@@ -587,5 +642,8 @@ window.closeAllPopups = closeAllPopups;
 window.openDetailsSidebar = openDetailsSidebar;
 window.closeDetailsSidebar = closeDetailsSidebar;
 window.updateHUD = updateHUD;
+window.renderWeather = renderWeather;          // if anything else needs them
+window.renderDistance = renderDistance;
+window.renderLocationInfo = renderLocationInfo;
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
