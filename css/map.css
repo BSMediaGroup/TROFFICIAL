@@ -1,322 +1,737 @@
-/* =======================================================
-   ============= GLOBAL LAYOUT & MAP CONTAINER ============
-   ======================================================= */
+/* ============================================================
+   MAPBOX CUSTOM MAP — v2 (CSS MIGRATION)
+   This file contains ALL styling from cuntmap99.html.
+   NO UI CHANGES HAVE BEEN MADE.
+   ============================================================ */
+
+/* ===================== FONTS ===================== */
+@font-face {
+  font-family: "RechargeBd";
+  src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Recharge%20Bd.otf")
+       format("opentype");
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "SuiGenerisRg";
+  src: url("https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Sui%20Generis%20Rg.otf")
+       format("opentype");
+  font-weight: 400;
+}
 
 html, body {
   margin: 0;
   padding: 0;
-  background: #000;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  font-family: 'Gemunu Libre', sans-serif;
-  color: #e8e8e8;
+  background: #05060A;
+  font-family: "SuiGenerisRg", system-ui;
 }
 
 #map {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100vw;
-  height: 100vh;
-}
-
-
-/* =======================================================
-   ========================= HUD ==========================
-   ======================================================= */
-
-#hud-container {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  z-index: 9999;
-  pointer-events: none;
-}
-
-.hud-block {
-  background: rgba(20, 20, 40, 0.75);
-  backdrop-filter: blur(4px);
-  padding: 6px 12px;
-  border-left: 3px solid #00aaff;
-  font-size: 14px;
-  letter-spacing: 0.5px;
-  color: #b9dcff;
-  pointer-events: none;
-}
-
-
-/* =======================================================
-   ==================== JOURNEY CONTROLS =================
-   ======================================================= */
-
-#journey-controls {
-  position: absolute;
-  bottom: 25px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 10px;
-  z-index: 9999;
-}
-
-.journey-btn {
-  background: rgba(15, 15, 30, 0.85);
-  color: #d4eaff;
-  border: 1px solid #005577;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  border-radius: 4px;
-  letter-spacing: 1px;
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.journey-btn:hover {
-  background: rgba(0, 80, 120, 0.7);
-  border-color: #00aaff;
-}
-
-
-/* =======================================================
-   ===================== SIDEBAR PANEL ===================
-   ======================================================= */
-
-#sidebar {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 320px;
-  height: 100vh;
-  background: rgba(10, 10, 25, 0.92);
-  backdrop-filter: blur(10px);
-  border-left: 2px solid #004a6f;
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
-  padding: 15px;
-  color: #d0e7ff;
-  z-index: 9999;
-  overflow-y: auto;
-}
-
-#sidebar.sidebar-open {
-  transform: translateX(0);
-}
-
-#sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #003c5a;
-}
-
-#sidebar-title {
-  font-size: 22px;
-  color: #b8deff;
-}
-
-#sidebar-close {
-  background: none;
-  border: none;
-  color: #66bfff;
-  font-size: 22px;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-#sidebar-close:hover {
-  color: #00aaff;
-}
-
-.sidebar-section {
-  margin-top: 18px;
-}
-
-.sidebar-section h3 {
-  font-size: 17px;
-  color: #94ceff;
-  border-bottom: 1px solid #003c5a;
-  padding-bottom: 4px;
-  margin-bottom: 8px;
-}
-
-
-/* =======================================================
-   ====================== AMENITIES =======================
-   ======================================================= */
-
-#amenities-container {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.amenity-block {
-  background: rgba(5, 5, 20, 0.6);
-  padding: 10px;
-  border: 1px solid #00334f;
-  border-radius: 4px;
-}
-
-.amenity-block h4 {
-  margin: 0 0 6px 0;
-  color: #88d1ff;
-  font-size: 15px;
-  letter-spacing: 0.5px;
-}
-
-.amenity-none {
-  color: #7e9cb7;
-  font-size: 13px;
-}
-
-.amenity-row {
-  padding: 4px 0;
-  cursor: pointer;
-  font-size: 14px;
-  color: #c6e6ff;
-  border-bottom: 1px dashed #003c5a;
-  transition: color 0.15s;
-}
-
-.amenity-row:last-child {
-  border-bottom: none;
-}
-
-.amenity-row:hover {
-  color: #00aaff;
-}
-
-
-/* =======================================================
-   ======================== MARKERS =======================
-   ======================================================= */
-
-.dc-marker {
-  width: 32px;
-  height: 32px;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-}
-
-.dc-marker-img {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 4px #000);
-  transition: transform 0.2s, filter 0.2s;
+  overflow: visible;
 }
 
-.marker-major .dc-marker-img {
-  filter: drop-shadow(0 0 6px #00d2ff);
-}
-
-.marker-minor .dc-marker-img {
-  opacity: 0.85;
-}
-
-.marker-departure .dc-marker-img {
-  filter: drop-shadow(0 0 6px #ffaa00);
-}
-
-.dc-marker-img:hover {
-  transform: scale(1.15);
-  filter: drop-shadow(0 0 8px #00aaff);
-}
-
-.marker-active {
-  transform: scale(1.25) !important;
-  filter: drop-shadow(0 0 10px #00ccff) !important;
-}
-
-
-/* =======================================================
-   ======================== LEGEND ========================
-   ======================================================= */
-
-#legend-container {
+/* ===================== OVERLAY ===================== */
+.trip-overlay {
   position: absolute;
-  bottom: 25px;
-  right: 25px;
-  background: rgba(10, 10, 25, 0.85);
-  padding: 12px 16px;
-  border: 1px solid #00354e;
-  border-radius: 4px;
+  top: 12px;
+  left: 12px;
   z-index: 9999;
-  color: #cfe9ff;
-  font-size: 14px;
-  backdrop-filter: blur(6px);
+  padding: 14px 18px;
+  width: 320px;
+  background: rgba(5,6,10,0.92);
+  border: 1px solid #606060;
+  border-radius: 10px;
+  box-shadow: 0 0 12px rgba(0,0,0,0.8);
+  color: #A3A3A3;
 }
 
-#legend-container h3 {
-  margin: 0 0 8px 0;
+.trip-overlay-title {
+  font-family: "RechargeBd";
   font-size: 16px;
-  color: #9dd6ff;
+  letter-spacing: 0.06em;
+  color: #F0F0F0;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
-.legend-item {
+.trip-overlay-subtitle {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.trip-legend-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 0;
+  font-size: 11px;
+  margin-bottom: 6px;
 }
 
-.legend-marker {
+.legend-line {
+  width: 22px;
+}
+
+.trip-legend-row img {
   width: 16px;
   height: 16px;
+}
+
+#legendTotalDistance {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid #505050;
+  color: #F0F0F0;
+  font-size: 11px;
+}
+
+/* collapsible legend block (subtitle + rows + distance) */
+#legendContainer {
+  overflow: hidden;
+  max-height: 600px;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.25s ease;
+}
+
+#legendContainer.legend-collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* slim icon+label toggle positioned just UNDER the overlay box */
+.legend-toggle-btn {
+  position: absolute;
+  left: 0px;
+  bottom: -28px;
+  background: transparent;
+  border: none;
+  padding: 2px 0 4px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.legend-toggle-label {
+  font-family: "SuiGenerisRg";
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: #A3A3A3;
+  text-shadow: 0 0 6px rgba(0,0,0,0.55);
+}
+
+.legend-toggle-btn img {
+  width: 18px;
+  height: 18px;
+  display: block;
+  filter: invert(65%) sepia(0%) saturate(0%) hue-rotate(180deg) brightness(95%) contrast(90%)
+          drop-shadow(0 0 4px rgba(0,0,0,0.55));
+}
+
+/* ===================== BUTTONS ===================== */
+.trip-journey-btn {
+  margin-top: 4px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #FFA50D;
+  background: rgba(5,6,10,0.95);
+  color: #FFA50D;
+  font-family: "RechargeBd";
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.trip-journey-btn:hover {
+  background: #FFA50D;
+  color: #05060A;
+}
+
+#resetStaticMap {
+  display: none;
+  margin-top: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #A0A0A0;
+  background: rgba(5,6,10,0.85);
+  color: #E0E0E0;
+  font-family: "RechargeBd";
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#resetStaticMap:hover {
+  background: #E0E0E0;
+  color: #05060A;
+}
+
+/* ===================== POPUPS ===================== */
+.mapboxgl-popup {
+  font-family: "SuiGenerisRg", system-ui;
+}
+
+.mapboxgl-popup-content {
+  background: rgba(0,0,0,0.87);
+  border: 1px solid #666;
+  border-radius: 12px;
+  padding: 14px 16px;
+  min-width: 360px;
+  max-width: 560px;
+}
+
+.mapboxgl-popup-close-button {
+  font-size: 24px;
+  color: #F0F0F0 !important;
+}
+
+.trip-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "RechargeBd";
+  font-size: 16px;
+  color: #F0F0F0;
+}
+
+.trip-popup-title-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.trip-popup-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #A3A3A3;
+  margin-top: 4px;
+}
+
+.trip-popup-flag {
+  width: 18px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid #FFF;
+  background-size: cover;
+  background-position: center;
+}
+
+.trip-popup-body {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #F0F0F0;
+  line-height: 1.45;
+}
+
+.trip-popup-travelled {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #A3A3A3;
+}
+
+.trip-popup-divider {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #505050;
+}
+
+.trip-popup-nav {
+  margin-top: 4px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.trip-popup-nav-link {
+  color: #FFA50D;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trip-popup-nav-link:hover {
+  text-decoration: underline;
+}
+
+.trip-popup-mode-icon {
+  width: 14px;
+  height: 14px;
+  filter: invert(62%) sepia(68%) saturate(585%) hue-rotate(359deg) brightness(101%) contrast(105%);
+}
+
+/* ===================== MARKERS ===================== */
+.trip-marker {
+  cursor: pointer;
+  z-index: 30 !important;
+}
+
+.trip-marker img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform-origin: 50% 100%;
+}
+
+.trip-marker.departure,
+.trip-marker.toronto,
+.trip-marker.destination {
+  width: 42px;
+  height: 42px;
+}
+
+.trip-marker.major {
+  width: 28px;
+  height: 28px;
+}
+
+.trip-marker.minor {
+  width: 20px;
+  height: 20px;
+}
+
+@keyframes pinBounce {
+  0%   { transform: scale(0.5); }
+  60%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.trip-marker.bounce img {
+  animation: pinBounce 0.55s ease-out forwards;
+}
+
+/* ===================== HUD ===================== */
+.journey-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: none;
+  text-align: center;
+}
+
+.journey-hud-buttons {
+  display: inline-flex;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.journey-hud-btn {
+  min-width: 140px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #FFA50D;
+  background: rgba(5,6,10,0.95);
+  color: #FFA50D;
+  font-family: "RechargeBd";
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.journey-hud-btn:hover:not(:disabled) {
+  background: #FFA50D;
+  color: #05060A;
+}
+
+.journey-hud-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.journey-hud-label {
+  font-size: 11px;
+  color: #F0F0F0;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+}
+
+.hud-mode-icon {
+  width: 15px;
+  height: 15px;
+  filter: invert(100%);
+}
+
+.hud-flag {
+  width: 18px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid #FFF;
+  background-size: cover;
+  background-position: center;
+}
+
+/* ========================= DETAILS SIDEBAR =========================== */
+.details-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 999998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+.details-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.details-sidebar {
+  position: fixed;
+  top: 0;
+  right: -480px;
+  width: 480px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  border-left: 1px solid #666;
+  z-index: 999999;
+  transition: right 0.40s cubic-bezier(0.22, 0.61, 0.36, 1);
+  box-shadow: -4px 0 18px rgba(0,0,0,0.65);
+  backdrop-filter: blur(6px);
+  color: #EEE;
+  font-family: "SuiGenerisRg", system-ui;
+}
+
+.details-sidebar.open {
+  right: 0;
+}
+
+.details-sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.details-sidebar-header {
+  position: relative;
+  width: 100%;
+}
+
+.details-sidebar-image {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  border-bottom: 1px solid #555;
+  background: #111;
+}
+
+.details-sidebar-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.75);
+  color: #FFF;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.marker-major {
-  background: #00c6ff;
+.details-sidebar-close:hover {
+  background: rgba(255,255,255,0.18);
 }
 
-.marker-minor {
-  background: #ffaa00;
+.details-sidebar-body {
+  padding: 18px 20px 30px 20px;
+  color: #EEE;
 }
 
-.flight-line,
-.road-line {
-  width: 22px;
-  height: 3px;
+/* Title row */
+.details-sidebar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.flight-line {
-  background: #00aaff;
+.details-sidebar-title-icon {
+  width: 26px;
+  height: 26px;
 }
 
-.road-line {
-  background: #ffaa00;
+.details-sidebar-title {
+  margin: 0;
+  padding: 0;
+  font-family: "RechargeBd";
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  color: #FFF;
 }
 
-
-/* =======================================================
-   ======================= SCROLLBAR ======================
-   ======================================================= */
-
-#sidebar::-webkit-scrollbar {
-  width: 6px;
+.details-sidebar-location {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #A3A3A3;
 }
 
-#sidebar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.4);
+.details-location-header-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-#sidebar::-webkit-scrollbar-thumb {
-  background: #0077aa;
+.details-location-flag-inline {
+  width: 18px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid #FFF;
+  background-size: cover;
+  background-position: center;
 }
 
-
-/* =======================================================
-   ======================== ANIMATIONS ====================
-   ======================================================= */
-
-@keyframes glowPulse {
-  0% { filter: drop-shadow(0 0 4px #00aaff); }
-  50% { filter: drop-shadow(0 0 8px #00e1ff); }
-  100% { filter: drop-shadow(0 0 4px #00aaff); }
+.details-sidebar-description {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #E0E0E0;
 }
 
-.marker-active {
-  animation: glowPulse 1.8s infinite;
+.details-sidebar-divider {
+  margin: 18px 0 20px 0;
+  border-bottom: 1px solid #555;
+}
+
+/* Generic section styling */
+.details-section {
+  margin-bottom: 18px;
+}
+
+.details-section-title {
+  font-family: "RechargeBd";
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #BEBEBE;
+  margin-bottom: 6px;
+}
+
+/* Location grid */
+.details-location-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.details-location-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px dotted rgba(255,255,255,0.06);
+}
+
+.details-location-row:last-child {
+  border-bottom: none;
+}
+
+.details-kv-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: #808080;
+  white-space: nowrap;
+  font-family: "RechargeBd";
+}
+
+.details-kv-value {
+  font-size: 13px;
+  color: #F4F4F4;
+  text-align: right;
+  flex: 1;
+}
+
+/* Pill */
+.details-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.25);
+  font-size: 11px;
+  color: #EAEAEA;
+  background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+
+/* Weather */
+.details-weather-body {
+  min-height: 40px;
+  font-size: 13px;
+}
+
+.details-weather-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.details-weather-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.6), rgba(0,0,0,0.4));
+}
+
+.details-weather-temp {
+  font-size: 18px;
+  font-family: "RechargeBd";
+  letter-spacing: 0.04em;
+}
+
+.details-weather-meta {
+  font-size: 12px;
+  color: #D0D0D0;
+}
+
+.details-weather-label {
+  margin-bottom: 2px;
+}
+
+.details-weather-wind {
+  font-size: 11px;
+  color: #AFAFAF;
+}
+
+.details-weather-status {
+  font-size: 12px;
+  color: #AFAFAF;
+}
+
+.details-weather-error {
+  font-size: 12px;
+  color: #FF9494;
+}
+
+/* Distance block */
+.details-distance-body {
+  font-size: 13px;
+  color: #EAEAEA;
+}
+
+.details-distance-body strong {
+  font-family: "RechargeBd";
+}
+
+/* Sidebar HUD */
+.details-sidebar-hud {
+  margin-bottom: 16px;
+  display: none;
+}
+
+.details-sidebar-hud-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.details-sidebar-hud-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #FFA50D;
+  background: rgba(5,6,10,0.95);
+  color: #FFA50D;
+  font-family: "RechargeBd";
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.details-sidebar-hud-btn:hover:not(:disabled) {
+  background: #FFA50D;
+  color: #05060A;
+}
+
+.details-sidebar-hud-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.details-sidebar-hud-label {
+  font-size: 11px;
+  color: #F0F0F0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.details-sidebar-hud-mode-icon {
+  width: 15px;
+  height: 15px;
+  filter: invert(100%);
+}
+
+.details-sidebar-hud-flag {
+  width: 18px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid #FFF;
+  background-size: cover;
+  background-position: center;
+}
+
+/* Explore links */
+.details-sidebar-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.details-sidebar-link {
+  color: #FFA50D;
+  text-decoration: none;
+  font-size: 14px;
+  font-family: "RechargeBd";
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.details-sidebar-link:hover {
+  text-decoration: underline;
+}
+
+/* Future placeholder */
+.details-sidebar-future {
+  margin-top: 20px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.02);
+  font-size: 11px;
+  color: #858585;
+  font-style: italic;
 }
