@@ -333,6 +333,21 @@ function orbitLoop() {
 }
 
 /* =======================================================================
+   GLOBAL SPIN ENGINE — REQUIRED BY map-core.js
+   (matches original monolith behaviour exactly)
+======================================================================= */
+
+window.spinGlobe = function () {
+    if (!spinning || !MAP_READY) return;
+
+    const map = MAP();
+    if (!map) return;
+
+    map.setBearing(map.getBearing() + ORBIT_ROTATION_SPEED);
+    requestAnimationFrame(window.spinGlobe);
+};
+
+/* =======================================================================
    WAYPOINT ORBIT FOCUS
 ======================================================================= */
 
@@ -652,3 +667,4 @@ window.startJourney = function () {
 };
 
 console.log("%cmap-logic.js fully loaded", "color:#00ff88;font-weight:bold;");
+
