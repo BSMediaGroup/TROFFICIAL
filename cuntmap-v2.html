@@ -1,1443 +1,228 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>North America Trip — Interactive Donation Map</title>
+  <meta charset="utf-8" />
+  <title>Cuntent Creator Map (v2)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Mapbox -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
-  <!-- Mapbox GL JS -->
-  <link
-    href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css"
-    rel="stylesheet"
-  />
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <script>
-    // ACCESS TOKEN ONLY — MAP INSTANCE IS CREATED BY JS MODULES
-    mapboxgl.accessToken =
-      "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
-  </script>
+  <!-- Turf (harmless to keep even if not used) -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
-  <!-- Fonts -->
-  <link
-    rel="preload"
-    href="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Recharge%20Bd.otf"
-    as="font"
-    type="font/otf"
-    crossorigin="anonymous"
-  />
-  <link
-    rel="preload"
-    href="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/FONTS/Sui%20Generis%20Rg.otf"
-    as="font"
-    type="font/otf"
-    crossorigin="anonymous"
-  />
+  <!-- Main CSS -->
+  <link rel="stylesheet" href="css/map.css">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
 
-  <style>
-    /* ============================================================
-       CORE PAGE LAYOUT
-       ============================================================ */
-
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      background: #020309;
-      color: #f5f5f5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      overflow: hidden;
-    }
-
-    body {
-      display: flex;
-      flex-direction: column;
-    }
-
-    #appRoot {
-      position: relative;
-      flex: 1 1 auto;
-      display: flex;
-      min-height: 0;
-      background: radial-gradient(circle at top, #061122 0, #010208 55%);
-    }
-
-    /* ============================================================
-       MAP CONTAINER
-       ============================================================ */
-
-    #map {
-      position: relative;
-      width: 65%;
-      min-width: 640px;
-      height: 100%;
-    }
-
-    .mapboxgl-canvas-container {
-      outline: none;
-    }
-
-    .mapboxgl-ctrl-bottom-right {
-      bottom: 12px;
-      right: 12px;
-    }
-
-    .mapboxgl-ctrl-group {
-      box-shadow: 0 0 16px rgba(0, 0, 0, 0.6);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    /* ============================================================
-       SIDEBAR LAYOUT
-       ============================================================ */
-
-    #sidebar {
-      position: relative;
-      width: 35%;
-      min-width: 380px;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      background: radial-gradient(circle at top left, #142241 0, #050712 52%, #020308 100%);
-      border-left: 1px solid rgba(255, 255, 255, 0.06);
-      box-shadow: -18px 0 45px rgba(0, 0, 0, 0.78);
-      z-index: 10;
-    }
-
-    #sidebarInner {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      padding: 18px 20px 18px 24px;
-      gap: 12px;
-      overflow: hidden;
-    }
-
-    /* ============================================================
-       BRAND HEADER / TITLE
-       ============================================================ */
-
-    .brand-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      margin-bottom: 4px;
-    }
-
-    .brand-mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 12px;
-      background: radial-gradient(circle at 30% 20%, #ffecb3 0, #e0a02c 32%, #8a5b0f 72%);
-      box-shadow:
-        0 0 24px rgba(255, 174, 0, 0.5),
-        0 0 72px rgba(255, 184, 28, 0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #120b02;
-      font-weight: 800;
-      font-size: 19px;
-      letter-spacing: 0.06em;
-      text-shadow:
-        0 0 3px rgba(255, 255, 255, 0.6),
-        0 0 10px rgba(57, 25, 0, 0.8);
-    }
-
-    .brand-text-block {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .brand-title {
-      font-family: "Recharge Bd", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
-      font-size: 16px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #f7f7f7;
-    }
-
-    .brand-subtitle {
-      font-size: 11px;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: rgba(214, 225, 255, 0.75);
-    }
-
-    /* ============================================================
-       JOURNEY SUMMARY PANEL
-       ============================================================ */
-
-    .journey-summary {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px 14px;
-      padding: 10px 10px 8px;
-      border-radius: 13px;
-      background:
-        radial-gradient(circle at 0 0, rgba(33, 148, 255, 0.35) 0, transparent 42%),
-        radial-gradient(circle at 100% 0, rgba(218, 96, 255, 0.32) 0, transparent 46%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(20, 22, 46, 0.85));
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow:
-        0 0 30px rgba(20, 134, 255, 0.35),
-        0 0 52px rgba(183, 92, 255, 0.24);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .journey-summary::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at 120% -10%, rgba(255, 255, 255, 0.24) 0, transparent 60%);
-      mix-blend-mode: screen;
-      opacity: 0.6;
-      pointer-events: none;
-    }
-
-    .journey-summary h2 {
-      grid-column: 1 / 3;
-      margin: 0 0 2px;
-      font-size: 13px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #fefefe;
-    }
-
-    .summary-subline {
-      grid-column: 1 / 3;
-      font-size: 11px;
-      color: rgba(226, 236, 255, 0.88);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 2px;
-    }
-
-    .summary-metric {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .summary-metric-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: rgba(202, 215, 255, 0.82);
-    }
-
-    .summary-metric-value {
-      font-size: 15px;
-      font-weight: 600;
-      color: #ffffff;
-    }
-
-    .summary-metric-sublabel {
-      font-size: 11px;
-      color: rgba(219, 228, 255, 0.85);
-    }
-
-    .summary-badge {
-      position: absolute;
-      right: 10px;
-      bottom: 8px;
-      padding: 3px 9px;
-      border-radius: 999px;
-      background: linear-gradient(135deg, #ecb22e, #9c6208);
-      color: #150c02;
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      border: 1px solid rgba(255, 255, 255, 0.7);
-      box-shadow:
-        0 0 16px rgba(255, 205, 87, 0.8),
-        0 0 32px rgba(255, 160, 46, 0.7);
-    }
-
-    /* ============================================================
-       SIDEBAR SCROLLING CONTENT
-       ============================================================ */
-
-    #sidebarScroll {
-      flex: 1 1 auto;
-      overflow: auto;
-      padding: 2px 2px 2px 0;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .section-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.18em;
-      color: rgba(177, 195, 232, 0.9);
-      margin-bottom: 4px;
-    }
-
-    .section-card {
-      border-radius: 12px;
-      background: radial-gradient(circle at top left, rgba(55, 67, 108, 0.55) 0, #060814 58%);
-      border: 1px solid rgba(151, 170, 215, 0.4);
-      padding: 10px 11px;
-      box-shadow: 0 0 18px rgba(0, 0, 0, 0.65);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .section-card::before {
-      content: "";
-      position: absolute;
-      inset: -20%;
-      background: radial-gradient(circle at top, rgba(40, 126, 255, 0.2) 0, transparent 56%);
-      opacity: 0.9;
-      pointer-events: none;
-    }
-
-    .section-card-inner {
-      position: relative;
-      z-index: 1;
-    }
-
-    /* ============================================================
-       TRIP LEG LIST
-       ============================================================ */
-
-    .leg-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 4px;
-    }
-
-    .leg-item {
-      display: grid;
-      grid-template-columns: 26px 1fr 54px;
-      gap: 7px;
-      align-items: center;
-      padding: 6px 7px;
-      border-radius: 9px;
-      background: linear-gradient(135deg, rgba(16, 26, 54, 0.9), rgba(7, 11, 24, 0.95));
-      border: 1px solid rgba(120, 146, 209, 0.75);
-      cursor: pointer;
-      transition:
-        background 0.16s ease-out,
-        transform 0.12s ease-out,
-        box-shadow 0.16s ease-out,
-        border-color 0.16s ease-out;
-    }
-
-    .leg-item:hover {
-      background: linear-gradient(135deg, rgba(32, 56, 121, 0.98), rgba(12, 16, 32, 0.98));
-      box-shadow: 0 0 18px rgba(42, 110, 255, 0.7);
-      transform: translateY(-1px);
-      border-color: #4f8fff;
-    }
-
-    .leg-pin {
-      width: 22px;
-      height: 22px;
-      border-radius: 999px;
-      background: radial-gradient(circle at 35% 20%, #ffe1a1 0, #e3961f 34%, #6f4200 78%);
-      box-shadow:
-        0 0 12px rgba(246, 199, 91, 0.8),
-        0 0 24px rgba(159, 95, 0, 0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      color: #1a0c02;
-    }
-
-    .leg-main {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
-    .leg-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: #f7f7f7;
-    }
-
-    .leg-sub {
-      font-size: 11px;
-      color: rgba(192, 206, 244, 0.85);
-    }
-
-    .leg-meta {
-      font-size: 10px;
-      text-align: right;
-      color: rgba(180, 195, 233, 0.95);
-    }
-
-    .leg-meta strong {
-      color: #ffd258;
-      font-weight: 600;
-    }
-
-    /* ============================================================
-       LIVE TIME & CURRENCY PANEL
-       ============================================================ */
-
-    .kv-grid {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 8px 12px;
-      font-size: 11px;
-      color: rgba(220, 228, 249, 0.9);
-    }
-
-    .kv-row {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
-    .kv-label {
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      font-size: 9px;
-      color: rgba(169, 186, 225, 0.9);
-    }
-
-    .kv-value {
-      font-size: 11px;
-      color: #ffffff;
-    }
-
-    .kv-value strong {
-      font-weight: 600;
-      color: #ffe48d;
-    }
-
-    /* ============================================================
-       LEGEND PANEL
-       ============================================================ */
-
-    #legendBox {
-      position: absolute;
-      left: 16px;
-      bottom: 16px;
-      min-width: 230px;
-      max-width: 260px;
-      padding: 10px 12px 9px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, rgba(5, 9, 22, 0.95), rgba(10, 16, 32, 0.98));
-      border: 1px solid rgba(128, 147, 193, 0.85);
-      box-shadow:
-        0 0 22px rgba(0, 0, 0, 0.9),
-        0 0 30px rgba(33, 115, 255, 0.7);
-      color: #dde6ff;
-      font-size: 11px;
-      z-index: 20;
-    }
-
-    #legendBox.collapsed {
-      padding-bottom: 8px;
-    }
-
-    #legendHeader {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-      margin-bottom: 6px;
-    }
-
-    #legendTitle {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: rgba(226, 234, 255, 0.96);
-    }
-
-    #legendToggle {
-      background: none;
-      border: none;
-      color: rgba(232, 240, 255, 0.9);
-      font-size: 11px;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 999px;
-      transition:
-        background 0.14s ease-out,
-        color 0.14s ease-out;
-    }
-
-    #legendToggle:hover {
-      background: rgba(71, 104, 190, 0.4);
-      color: #ffffff;
-    }
-
-    .legend-body {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-
-    .legend-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .legend-label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-    }
-
-    .legend-swatch {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      box-shadow:
-        0 0 8px rgba(0, 0, 0, 0.8),
-        0 0 12px rgba(0, 0, 0, 0.6);
-    }
-
-    .legend-swatch.flight {
-      background: linear-gradient(135deg, #ffed9e, #efb319);
-    }
-
-    .legend-swatch.drive {
-      background: linear-gradient(135deg, #7fe0ff, #2980ff);
-    }
-
-    .legend-swatch.waypoint {
-      background: radial-gradient(circle at 30% 20%, #ffe7b5 0, #e29b1a 35%, #6b3d00 77%);
-    }
-
-    .legend-meta {
-      font-size: 10px;
-      color: rgba(193, 210, 246, 0.92);
-      text-align: right;
-    }
-
-    /* ============================================================
-       MAP MARKERS & POPUPS
-       ============================================================ */
-
-    .trip-marker {
-      width: 30px;
-      height: 30px;
-      border-radius: 999px;
-      box-shadow:
-        0 0 10px rgba(0, 0, 0, 0.9),
-        0 0 18px rgba(0, 0, 0, 0.9);
-      background: radial-gradient(circle at 30% 20%, #fff2c2 0, #f0b021 34%, #703f01 82%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transform-origin: bottom center;
-      transform: translateY(0);
-      transition:
-        transform 0.12s ease-out,
-        box-shadow 0.12s ease-out;
-    }
-
-    .trip-marker img.marker-icon {
-      width: 18px;
-      height: 18px;
-      filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9));
-    }
-
-    .trip-marker.bounce {
-      animation: marker-bounce-in 0.55s ease-out forwards;
-    }
-
-    .trip-marker:hover {
-      transform: translateY(-2px) scale(1.04);
-      box-shadow:
-        0 0 20px rgba(0, 0, 0, 0.95),
-        0 0 34px rgba(255, 199, 92, 0.95);
-    }
-
-    .trip-marker.departure {
-      background: radial-gradient(circle at 32% 22%, #ffe8c1 0, #f89b28 34%, #823d00 82%);
-    }
-
-    .trip-marker.arrival {
-      background: radial-gradient(circle at 32% 22%, #ffd5f3 0, #ea3d98 34%, #6b0034 82%);
-    }
-
-    @keyframes marker-bounce-in {
-      0% {
-        transform: translateY(-26px) scale(0.6);
-        opacity: 0;
-      }
-      55% {
-        transform: translateY(3px) scale(1.06);
-        opacity: 1;
-      }
-      78% {
-        transform: translateY(-2px) scale(0.98);
-      }
-      100% {
-        transform: translateY(0) scale(1);
-      }
-    }
-
-    .mapboxgl-popup {
-      max-width: 280px;
-      z-index: 25;
-    }
-
-    .mapboxgl-popup-content {
-      background: radial-gradient(circle at top, #1d2840 0, #080a14 55%);
-      border-radius: 13px;
-      border: 1px solid rgba(152, 176, 230, 0.85);
-      box-shadow:
-        0 0 22px rgba(0, 0, 0, 0.96),
-        0 0 34px rgba(33, 116, 252, 0.85);
-      padding: 0;
-      overflow: hidden;
-    }
-
-    .mapboxgl-popup-close-button {
-      font-size: 18px;
-      color: rgba(233, 242, 255, 0.9);
-      width: 22px;
-      height: 22px;
-      border-radius: 999px;
-      background: rgba(7, 9, 18, 0.9);
-      border: 1px solid rgba(158, 183, 240, 0.95);
-      box-shadow:
-        0 0 10px rgba(0, 0, 0, 0.9),
-        0 0 18px rgba(33, 104, 238, 0.9);
-      right: 8px;
-      top: 8px;
-    }
-
-    .mapboxgl-popup-close-button:hover {
-      background: #eb4f3f;
-      border-color: #ffbcb4;
-      color: #150205;
-    }
-
-    .trip-popup {
-      padding: 10px 10px 9px 10px;
-      font-size: 11px;
-      color: #dde6ff;
-    }
-
-    .trip-popup-title {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-weight: 600;
-      margin-bottom: 4px;
-      font-size: 12px;
-      color: #ffffff;
-    }
-
-    .trip-popup-title-icon {
-      width: 18px;
-      height: 18px;
-      border-radius: 4px;
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.85);
-      object-fit: cover;
-    }
-
-    .trip-popup-location {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 11px;
-      margin-bottom: 6px;
-      color: rgba(210, 223, 255, 0.96);
-    }
-
-    .trip-popup-flag {
-      width: 24px;
-      height: 16px;
-      border-radius: 3px;
-      border: 1px solid rgba(238, 244, 255, 0.9);
-      background-size: cover;
-      background-position: center;
-      box-shadow: 0 0 6px rgba(0, 0, 0, 0.85);
-    }
-
-    .trip-popup-body {
-      font-size: 11px;
-      color: rgba(222, 232, 255, 0.9);
-      margin-bottom: 6px;
-      line-height: 1.45;
-    }
-
-    .trip-popup-travelled {
-      font-size: 11px;
-      color: rgba(212, 226, 255, 0.95);
-      margin-bottom: 6px;
-    }
-
-    .trip-popup-divider {
-      height: 1px;
-      background: linear-gradient(
-        to right,
-        rgba(147, 173, 230, 0.5),
-        rgba(221, 231, 255, 0.98),
-        rgba(147, 173, 230, 0.5)
-      );
-      margin-bottom: 6px;
-    }
-
-    .trip-popup-nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .trip-popup-nav-link {
-      font-size: 11px;
-      padding: 5px 7px;
-      border-radius: 999px;
-      background: radial-gradient(circle at 35% 0, #ffffff 0, #90a9ff 32%, #1d2e60 72%);
-      color: #050713;
-      font-weight: 600;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      box-shadow:
-        0 0 12px rgba(0, 0, 0, 0.85),
-        0 0 22px rgba(116, 146, 255, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.9);
-      text-transform: uppercase;
-      letter-spacing: 0.11em;
-    }
-
-    .trip-popup-nav-link.details-btn {
-      background: radial-gradient(circle at 35% 0, #ffffff 0, #ffd571 32%, #6f3a02 82%);
-      box-shadow:
-        0 0 12px rgba(0, 0, 0, 0.9),
-        0 0 26px rgba(248, 181, 74, 0.9);
-    }
-
-    .trip-popup-nav-link:hover {
-      filter: brightness(1.05);
-      transform: translateY(-1px);
-    }
-
-    .trip-popup-mode-icon {
-      width: 13px;
-      height: 13px;
-      filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.9));
-    }
-
-    /* ============================================================
-       HUD (TOP OF MAP)
-       ============================================================ */
-
-    #journeyHud {
-      position: absolute;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      min-width: 320px;
-      max-width: 540px;
-      padding: 7px 8px;
-      border-radius: 999px;
-      background: radial-gradient(circle at top, rgba(20, 34, 74, 0.96) 0, #050713 75%);
-      border: 1px solid rgba(152, 177, 230, 0.9);
-      box-shadow:
-        0 0 24px rgba(0, 0, 0, 0.95),
-        0 0 34px rgba(42, 118, 255, 0.9);
-      display: none;
-      align-items: center;
-      gap: 10px;
-      z-index: 30;
-    }
-
-    .hud-btn {
-      height: 26px;
-      padding: 0 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(158, 183, 240, 0.95);
-      background: radial-gradient(circle at 30% 0, #ffffff 0, #8ea7ff 33%, #1b2c5a 82%);
-      color: #050713;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.13em;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      box-shadow:
-        0 0 16px rgba(0, 0, 0, 0.9),
-        0 0 24px rgba(96, 131, 253, 0.95);
-    }
-
-    .hud-btn:disabled {
-      opacity: 0.4;
-      cursor: default;
-      box-shadow: none;
-      background: linear-gradient(135deg, #7984a5, #25293e);
-      color: rgba(15, 18, 36, 0.9);
-    }
-
-    .hud-label {
-      flex: 1;
-      font-size: 11px;
-      color: rgba(223, 234, 255, 0.96);
-    }
-
-    .hud-mode-icon {
-      width: 13px;
-      height: 13px;
-      margin-right: 4px;
-      vertical-align: -1px;
-      filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9));
-    }
-
-    .hud-flag {
-      display: inline-block;
-      width: 20px;
-      height: 14px;
-      margin-left: 6px;
-      background-size: cover;
-      background-position: center;
-      border-radius: 2px;
-      border: 1px solid rgba(235, 243, 255, 0.95);
-      box-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
-      vertical-align: -2px;
-    }
-
-    /* ============================================================
-       START JOURNEY BUTTON
-       ============================================================ */
-
-    #startJourneyBtn {
-      margin-top: 6px;
-      align-self: flex-start;
-      padding: 6px 13px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 196, 102, 0.95);
-      background: radial-gradient(circle at 35% 0, #fff4c7 0, #f4b739 34%, #784100 83%);
-      color: #160a00;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      box-shadow:
-        0 0 18px rgba(0, 0, 0, 0.95),
-        0 0 32px rgba(255, 197, 86, 0.95);
-    }
-
-    #startJourneyBtn span.icon {
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      background: radial-gradient(circle at 30% 20%, #fff7d4 0, #ffcf4b 40%, #9c5a00 82%);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow:
-        0 0 12px rgba(255, 217, 132, 0.9),
-        0 0 24px rgba(140, 74, 0, 0.9);
-      font-size: 11px;
-    }
-
-    #startJourneyBtn:hover {
-      filter: brightness(1.05);
-      transform: translateY(-1px);
-    }
-
-    /* ============================================================
-       DETAILS SIDEBAR PANEL (OVERLAY ON MAP)
-       ============================================================ */
-
-    #detailsOverlay {
-      position: fixed;
-      inset: 0;
-      background: radial-gradient(circle at 10% 10%, rgba(21, 36, 77, 0.75), rgba(1, 2, 7, 0.9));
-      opacity: 0;
-      visibility: hidden;
-      transition:
-        opacity 0.18s ease-out,
-        visibility 0.18s ease-out;
-      z-index: 40;
-    }
-
-    #detailsOverlay.open {
-      opacity: 1;
-      visibility: visible;
-    }
-
-    #detailsSidebar {
-      position: fixed;
-      top: 0;
-      right: -420px;
-      width: 380px;
-      height: 100%;
-      background: radial-gradient(circle at top left, #202b49 0, #050713 55%);
-      border-left: 1px solid rgba(151, 173, 228, 0.9);
-      box-shadow: -28px 0 48px rgba(0, 0, 0, 0.98);
-      z-index: 50;
-      display: flex;
-      flex-direction: column;
-      transition: right 0.22s cubic-bezier(0.23, 1, 0.32, 1);
-    }
-
-    #detailsSidebar.open {
-      right: 0;
-    }
-
-    #detailsSidebarHeader {
-      padding: 12px 14px 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      border-bottom: 1px solid rgba(148, 173, 232, 0.8);
-      background: radial-gradient(circle at top, rgba(54, 74, 122, 0.95), rgba(6, 9, 20, 0.98));
-    }
-
-    #detailsSidebarTitleBlock {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    #detailsSidebarTitle {
-      font-size: 13px;
-      font-weight: 600;
-      color: #ffffff;
-    }
-
-    #detailsSidebarLocation {
-      font-size: 11px;
-      color: rgba(213, 224, 250, 0.95);
-    }
-
-    .details-location-header-line {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .details-location-flag-inline {
-      display: inline-block;
-      width: 18px;
-      height: 12px;
-      border-radius: 2px;
-      background-size: cover;
-      background-position: center;
-      border: 1px solid rgba(236, 243, 255, 0.95);
-      box-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
-      vertical-align: -1px;
-    }
-
-    #detailsSidebarClose {
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      border: 1px solid rgba(160, 186, 243, 0.95);
-      background: radial-gradient(circle at 30% 0, #ffffff 0, #879cee 34%, #1a2753 82%);
-      color: #050713;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow:
-        0 0 16px rgba(0, 0, 0, 0.95),
-        0 0 26px rgba(121, 146, 240, 0.9);
-      font-size: 13px;
-    }
-
-    #detailsSidebarClose:hover {
-      filter: brightness(1.05);
-      transform: translateY(-1px);
-    }
-
-    #detailsSidebarBody {
-      flex: 1;
-      overflow: auto;
-      padding: 10px 12px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    #detailsSidebarImage {
-      width: 100%;
-      border-radius: 10px;
-      object-fit: cover;
-      max-height: 190px;
-      box-shadow:
-        0 0 24px rgba(0, 0, 0, 0.96),
-        0 0 42px rgba(15, 15, 25, 0.98);
-      border: 1px solid rgba(170, 189, 236, 0.9);
-    }
-
-    #detailsSidebarDescription {
-      font-size: 11px;
-      color: rgba(217, 227, 251, 0.96);
-      line-height: 1.5;
-    }
-
-    .details-link-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 4px;
-    }
-
-    .details-link-pill {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      padding: 5px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(146, 176, 240, 0.95);
-      background: radial-gradient(circle at 30% 0, #ffffff 0, #9cb2ff 38%, #222f5b 83%);
-      color: #050713;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      text-decoration: none;
-      box-shadow:
-        0 0 16px rgba(0, 0, 0, 0.92),
-        0 0 26px rgba(112, 140, 248, 0.9);
-    }
-
-    .details-link-pill:hover {
-      filter: brightness(1.06);
-      transform: translateY(-1px);
-    }
-
-    /* LOCATION INFO GROUP */
-
-    .details-location-group {
-      border-radius: 10px;
-      background: radial-gradient(circle at top left, #252f4c 0, #050713 55%);
-      border: 1px solid rgba(144, 170, 229, 0.9);
-      padding: 8px 9px;
-      box-shadow: 0 0 18px rgba(0, 0, 0, 0.94);
-      font-size: 11px;
-      color: rgba(221, 231, 254, 0.96);
-    }
-
-    .details-location-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 3px;
-    }
-
-    .details-kv-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: rgba(182, 198, 234, 0.9);
-    }
-
-    .details-kv-value {
-      font-size: 11px;
-      color: #ffffff;
-    }
-
-    /* WEATHER PANEL */
-
-    .details-weather-group {
-      border-radius: 10px;
-      background: radial-gradient(circle at top, #273453 0, #050713 55%);
-      border: 1px solid rgba(142, 169, 231, 0.9);
-      padding: 8px 9px;
-      box-shadow: 0 0 18px rgba(0, 0, 0, 0.94);
-      font-size: 11px;
-      color: rgba(223, 233, 255, 0.96);
-    }
-
-    .details-weather-main {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .details-weather-icon {
-      font-size: 20px;
-    }
-
-    .details-weather-temp {
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .details-weather-status,
-    .details-weather-error {
-      font-size: 11px;
-      color: rgba(216, 227, 251, 0.96);
-    }
-
-    /* DISTANCE PANEL */
-
-    .details-distance-group {
-      border-radius: 10px;
-      background: radial-gradient(circle at top, #283453 0, #040612 55%);
-      border: 1px solid rgba(142, 168, 230, 0.9);
-      padding: 8px 9px;
-      box-shadow: 0 0 18px rgba(0, 0, 0, 0.94);
-      font-size: 11px;
-      color: rgba(223, 233, 255, 0.96);
-    }
-
-    /* DETAILS SIDEBAR HUD */
-
-    #detailsSidebarHud {
-      margin-top: 6px;
-      padding-top: 6px;
-      border-top: 1px solid rgba(146, 173, 233, 0.7);
-      display: none;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      color: rgba(223, 233, 255, 0.96);
-    }
-
-    .details-sidebar-hud-mode-icon {
-      width: 14px;
-      height: 14px;
-      vertical-align: -2px;
-      margin-right: 4px;
-      filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.9));
-    }
-
-    .details-sidebar-hud-flag {
-      display: inline-block;
-      width: 18px;
-      height: 12px;
-      margin-left: 6px;
-      border-radius: 2px;
-      background-size: cover;
-      background-position: center;
-      border: 1px solid rgba(235, 243, 255, 0.96);
-      box-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
-      vertical-align: -1px;
-    }
-
-    #detailsHudPrev,
-    #detailsHudNext,
-    #detailsSidebarStartJourney {
-      height: 24px;
-      padding: 0 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(160, 186, 243, 0.95);
-      background: radial-gradient(circle at 30% 0, #ffffff 0, #8ea4f1 34%, #1a2753 82%);
-      color: #050713;
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.13em;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      box-shadow:
-        0 0 16px rgba(0, 0, 0, 0.94),
-        0 0 24px rgba(116, 142, 247, 0.9);
-    }
-
-    #detailsHudPrev:disabled,
-    #detailsHudNext:disabled {
-      opacity: 0.4;
-      cursor: default;
-      box-shadow: none;
-      background: linear-gradient(135deg, #7b86a5, #272b41);
-      color: rgba(19, 22, 40, 0.9);
-    }
-
-    #detailsSidebarStartJourney {
-      margin-top: 6px;
-    }
-
-    /* ============================================================
-       RESET STATIC MAP BUTTON
-       ============================================================ */
-
-    #resetStaticMap {
-      position: absolute;
-      bottom: 16px;
-      right: 16px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(158, 183, 240, 0.95);
-      background: radial-gradient(circle at 30% 0, #ffffff 0, #8ea7ff 36%, #1b295a 84%);
-      color: #050713;
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      display: none;
-      align-items: center;
-      gap: 7px;
-      cursor: pointer;
-      box-shadow:
-        0 0 18px rgba(0, 0, 0, 0.96),
-        0 0 28px rgba(110, 138, 246, 0.94);
-      z-index: 30;
-    }
-
-    #resetStaticMap span.icon {
-      width: 16px;
-      height: 16px;
-      border-radius: 999px;
-      background: radial-gradient(circle at 30% 20%, #fff4c6 0, #f3ba3f 36%, #774300 82%);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow:
-        0 0 10px rgba(250, 211, 124, 0.96),
-        0 0 22px rgba(139, 79, 0, 0.9);
-      font-size: 10px;
-    }
-
-    #resetStaticMap:hover {
-      filter: brightness(1.06);
-      transform: translateY(-1px);
-    }
-  </style>
 </head>
+
 <body>
-  <div id="appRoot">
-    <!-- =============================== MAP COLUMN =============================== -->
-    <div id="map">
-      <!-- Top HUD -->
-      <div id="journeyHud" style="display:none;">
-        <button id="hudPrev" class="hud-btn">Back</button>
-        <div id="hudLabel" class="hud-label"></div>
-        <button id="hudNext" class="hud-btn">Next Stop</button>
-      </div>
 
-      <!-- Legend box -->
-      <div id="legendBox">
-        <div id="legendHeader">
-          <div id="legendTitle">Route Legend</div>
-          <button id="legendToggle">
-            <span>Collapse</span>
-          </button>
-        </div>
-        <div class="legend-body">
-          <div class="legend-row">
-            <div class="legend-label">
-              <div class="legend-swatch flight"></div>
-              <span>International Flight Legs</span>
-            </div>
-            <div class="legend-meta">Sydney → L.A. → Toronto</div>
-          </div>
-          <div class="legend-row">
-            <div class="legend-label">
-              <div class="legend-swatch drive"></div>
-              <span>Road Trip — Driving</span>
-            </div>
-            <div class="legend-meta">Toronto → Toms River</div>
-          </div>
-          <div class="legend-row">
-            <div class="legend-label">
-              <div class="legend-swatch waypoint"></div>
-              <span>Major Stops &amp; Points</span>
-            </div>
-            <div class="legend-meta">Cities + key stopovers</div>
-          </div>
-        </div>
-      </div>
+<!-- ============================================================
+     MAP CONTAINER
+============================================================ -->
+<div id="map"></div>
 
-      <!-- Reset Static Map Button -->
-      <button id="resetStaticMap">
-        <span class="icon">⟳</span>
-        <span>Return to Globe</span>
-      </button>
+
+<!-- ============================================================
+     OVERLAY / LEGEND PANEL
+============================================================ -->
+<div class="trip-overlay">
+  <div class="trip-overlay-title">Cuntent Creator Map</div>
+
+  <div id="legendContainer">
+    <div class="trip-overlay-subtitle">
+      Sydney → L.A. → Toronto flights, then road trip via Buffalo, NYC & Hoboken to Toms River.
     </div>
 
-    <!-- =============================== SIDEBAR COLUMN =============================== -->
-    <aside id="sidebar">
-      <div id="sidebarInner">
-        <!-- Brand / Title -->
-        <header class="brand-header">
-          <div class="brand-mark">DC</div>
-          <div class="brand-text-block">
-            <div class="brand-title">North America Trip</div>
-            <div class="brand-subtitle">Sydney → L.A. → Toronto → Toms River</div>
-          </div>
-        </header>
+    <div class="trip-legend-row">
+      <span class="legend-line" style="border-top:2px dashed #478ED3"></span> Flights
+    </div>
+    <div class="trip-legend-row">
+      <span class="legend-line" style="border-top:2px solid #FF9C57"></span> Driving Route
+    </div>
 
-        <!-- Journey Summary -->
-        <section class="journey-summary">
-          <h2>Donation Route Overview</h2>
-          <div class="summary-subline">Live trip preview · Interactive globe</div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/dcpin.svg"> Departure
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/STARBARX.svg"> Final Destination
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/CANpin.svg"> Arrival / Toronto
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/MajorWP2.svg"> Major Waypoints
+    </div>
+    <div class="trip-legend-row">
+      <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg"> Minor Waypoints
+    </div>
 
-          <div class="summary-metric">
-            <div class="summary-metric-label">Total Distance (approx)</div>
-            <div class="summary-metric-value">~ 15,000+ km</div>
-            <div class="summary-metric-sublabel">Flights + driving combined</div>
-          </div>
-
-          <div class="summary-metric">
-            <div class="summary-metric-label">Major Stops</div>
-            <div class="summary-metric-value">8 cities</div>
-            <div class="summary-metric-sublabel">From Sydney to Toms River</div>
-          </div>
-
-          <div class="summary-metric">
-            <div class="summary-metric-label">Primary Purpose</div>
-            <div class="summary-metric-value">Donation Campaign</div>
-            <div class="summary-metric-sublabel">Support key creative projects</div>
-          </div>
-
-          <div class="summary-metric">
-            <div class="summary-metric-label">Map Interaction</div>
-            <div class="summary-metric-value">Click &amp; explore</div>
-            <div class="summary-metric-sublabel">Each stop shows local info</div>
-          </div>
-
-          <div class="summary-badge">Live Trip Preview</div>
-        </section>
-
-        <button id="startJourneyBtn">
-          <span class="icon">▶</span>
-          <span>Start Journey</span>
-        </button>
-
-        <!-- Scrollable Sidebar Content -->
-        <div id="sidebarScroll">
-          <!-- Trip Leg List -->
-          <section>
-            <div class="section-label">Route Stops</div>
-            <div class="section-card">
-              <div class="section-card-inner">
-                <div class="leg-list" id="legList"></div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Local Time & Currency -->
-          <section>
-            <div class="section-label">Local Time &amp; Currency</div>
-            <div class="section-card">
-              <div class="section-card-inner">
-                <div class="kv-grid">
-                  <div class="kv-row">
-                    <div class="kv-label">Local Time</div>
-                    <div class="kv-value" id="kvLocalTime">—</div>
-                  </div>
-                  <div class="kv-row">
-                    <div class="kv-label">Time Zone</div>
-                    <div class="kv-value" id="kvTimeZone">—</div>
-                  </div>
-                  <div class="kv-row">
-                    <div class="kv-label">Currency</div>
-                    <div class="kv-value" id="kvCurrency">—</div>
-                  </div>
-                  <div class="kv-row">
-                    <div class="kv-label">City &amp; Country</div>
-                    <div class="kv-value" id="kvCityCountry">—</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-    </aside>
+    <div id="legendTotalDistance">Total Distance: calculating…</div>
   </div>
 
-  <!-- DETAILS SIDEBAR (OVERLAY) -->
-  <div id="detailsOverlay"></div>
-  <aside id="detailsSidebar">
-    <header id="detailsSidebarHeader">
-      <div id="detailsSidebarTitleBlock">
-        <div id="detailsSidebarTitle">Location</div>
-        <div id="detailsSidebarLocation">—</div>
-      </div>
-      <button id="detailsSidebarClose">✕</button>
-    </header>
+  <button id="journeyToggle" class="trip-journey-btn">Start Journey</button>
+  <button id="resetStaticMap">Reset Map</button>
 
-    <div id="detailsSidebarBody">
-      <img
-        id="detailsSidebarImage"
-        src="https://images.pexels.com/photos/240040/pexels-photo-240040.jpeg?auto=compress&cs=tinysrgb&w=1600"
-        alt="Location"
-      />
-      <div id="detailsSidebarDescription">
-        Detailed information about this stop will appear here, including travel distances,
-        nearby attractions, and current weather.
-      </div>
+  <button id="legendToggle" class="legend-toggle-btn" type="button">
+    <img
+      id="legendToggleIcon"
+      src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/collapse.svg"
+      alt="Toggle legend">
+    <span id="legendToggleLabel" class="legend-toggle-label">COLLAPSE</span>
+  </button>
+</div>
 
-      <div class="details-link-row">
-        <a href="#" target="_blank" id="detailsSidebarTourist" class="details-link-pill">
-          <span>Tourist Info</span>
-        </a>
-        <a href="#" target="_blank" id="detailsSidebarToilets" class="details-link-pill">
-          <span>Public Toilets</span>
-        </a>
-        <a href="#" target="_blank" id="detailsSidebarHotels" class="details-link-pill">
-          <span>Nearby Hotels</span>
-        </a>
-      </div>
 
-      <!-- Location Info -->
-      <section class="details-location-group">
-        <div class="section-label">Location Details</div>
-        <div id="detailsLocationInfoBody"></div>
-      </section>
+<!-- ============================================================
+     JOURNEY HUD (BOTTOM OVERLAY)
+============================================================ -->
+<div id="journeyHud" class="journey-hud">
+  <div class="journey-hud-buttons">
+    <button id="hudPrev" class="journey-hud-btn">GO BACK</button>
+    <button id="hudNext" class="journey-hud-btn">Next Stop</button>
+  </div>
+  <div id="hudLabel" class="journey-hud-label"></div>
+</div>
 
-      <!-- Weather -->
-      <section class="details-weather-group">
-        <div class="section-label">Current Weather</div>
-        <div id="detailsWeatherContent"></div>
-      </section>
 
-      <!-- Distance -->
-      <section class="details-distance-group">
-        <div class="section-label">Travel Distances</div>
-        <div id="detailsDistanceContent"></div>
-      </section>
+<!-- ============================================================
+     DETAILS SIDEBAR + OVERLAY
+============================================================ -->
+<div id="detailsOverlay" class="details-overlay"></div>
 
-      <!-- Details Sidebar HUD -->
-      <div id="detailsSidebarHud">
-        <button id="detailsHudPrev">Back</button>
-        <div id="detailsHudLabel" style="flex:1;"></div>
-        <button id="detailsHudNext">Next Stop</button>
-      </div>
+<div id="detailsSidebar" class="details-sidebar">
+  <div class="details-sidebar-content">
 
-      <button id="detailsSidebarStartJourney" style="display:none; margin-top:6px;">
-        ▶ Begin Route from Here
-      </button>
+    <!-- Header: Main image + Close button -->
+    <div class="details-sidebar-header">
+      <img id="detailsSidebarImage" class="details-sidebar-image" src="" alt="">
+      <button id="detailsSidebarClose" class="details-sidebar-close">×</button>
     </div>
-  </aside>
 
-  <!-- ============================================================
-       SCRIPT MODULE LOADING (ORDER IS CRITICAL)
-       ============================================================ -->
+    <div class="details-sidebar-body">
 
-  <script src="js/map-config.js"></script>
-  <script src="js/map-style.js"></script>
-  <script src="js/map-data.js"></script>
-  <script src="js/map-logic.js"></script>
-  <script src="js/map-ui.js"></script>
-  <script src="js/map-core.js"></script>
+      <!-- Title Row -->
+      <div class="details-sidebar-title-row">
+        <img id="detailsSidebarIcon" class="details-sidebar-title-icon" src="" alt="">
+        <h2 id="detailsSidebarTitle" class="details-sidebar-title"></h2>
+      </div>
+
+      <!-- Location Line -->
+      <div id="detailsSidebarLocation" class="details-sidebar-location"></div>
+
+      <!-- Description -->
+      <div id="detailsSidebarDescription" class="details-sidebar-description"></div>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- Start Journey Button (shown when not in journey mode) -->
+      <button id="detailsSidebarStartJourney"
+              class="details-sidebar-hud-btn"
+              style="display:none; margin-bottom:16px; width:100%;">
+        Start Journey
+      </button>
+
+      <!-- Sidebar HUD -->
+      <div id="detailsSidebarHud" class="details-sidebar-hud">
+        <div class="details-sidebar-hud-buttons">
+          <button id="detailsHudPrev" class="details-sidebar-hud-btn">GO BACK</button>
+          <button id="detailsHudNext" class="details-sidebar-hud-btn">Next Stop</button>
+        </div>
+        <div id="detailsHudLabel" class="details-sidebar-hud-label"></div>
+      </div>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- LOCATION INFO -->
+      <section id="detailsLocationInfo" class="details-section">
+        <div class="details-section-title">Location Info</div>
+        <div id="detailsLocationInfoBody" class="details-location-grid"></div>
+      </section>
+
+      <!-- WEATHER -->
+      <section id="detailsWeather" class="details-section">
+        <div class="details-section-title">Live Weather</div>
+        <div id="detailsWeatherContent" class="details-weather-body"></div>
+      </section>
+
+      <!-- DISTANCE -->
+      <section id="detailsDistance" class="details-section">
+        <div class="details-section-title">Route Distance</div>
+        <div id="detailsDistanceContent" class="details-distance-body"></div>
+      </section>
+
+      <div class="details-sidebar-divider"></div>
+
+      <!-- Explore Links (existing system) -->
+      <div class="details-sidebar-links">
+        <a id="detailsSidebarTourist"  class="details-sidebar-link" target="_blank">Tourist Places</a>
+        <a id="detailsSidebarToilets"  class="details-sidebar-link" target="_blank">Toilets</a>
+        <a id="detailsSidebarHotels"   class="details-sidebar-link" target="_blank">Hotels</a>
+      </div>
+
+      <!-- =========================== -->
+      <!--   POI SECTIONS (AUTOFILL)   -->
+      <!-- =========================== -->
+      <section class="details-section">
+        <div class="details-section-title">Nearby Tourist Spots</div>
+        <div id="detailsSidebarTouristList" class="details-poi-list"></div>
+      </section>
+      
+      <section class="details-section">
+        <div class="details-section-title">Nearby Toilets</div>
+        <div id="detailsSidebarToiletsList" class="details-poi-list"></div>
+      </section>
+      
+      <section class="details-section">
+        <div class="details-section-title">Nearby Hotels</div>
+        <div id="detailsSidebarHotelsList" class="details-poi-list"></div>
+      </section>
+
+      <!-- Future Content Placeholder -->
+      <div id="detailsSidebarFuture" class="details-sidebar-future">
+        Future content for this waypoint will appear here.
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ============================================================
+     SCRIPT MODULE LOADING — THE ONLY CORRECT ORDER
+============================================================ -->
+
+
+
+<!-- 1️⃣ CONFIG FIRST -->
+<script src="js/map-config.js"></script>
+
+<!-- 2️⃣ THEN DATA (WAYPOINTS, ROUTES, CONSTANTS) -->
+<script src="js/map-data.js"></script>
+
+<!-- 3️⃣ THEN CORE (BOOTSTRAP, VALIDATION, ORDER CHECKS) -->
+<script src="js/map-core.js"></script>
+
+<!-- 4️⃣ THEN STYLE (FOG, STARFIELD, TERRAIN, NATION SHADING) -->
+<script src="js/map-style.js"></script>
+
+<!-- 5️⃣ THEN LOGIC (ORBIT, JOURNEY MODE, CAMERA, DISTANCES) -->
+<script src="js/map-logic.js"></script>
+
+<!-- 6️⃣ LAST: UI (MARKERS, POPUPS, SIDEBAR, HUD) -->
+<script src="js/map-ui.js"></script>
+
+
+
 </body>
 </html>
+
+
+
+
+
+
