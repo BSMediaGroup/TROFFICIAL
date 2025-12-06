@@ -204,23 +204,24 @@
 <!-- 2️⃣ DATA -->
 <script src="js/map-data.js"></script>
 
-<!-- 3️⃣ STYLE (creates window.__MAP) -->
+<!-- 3️⃣ CORE (bootstrap + validation MUST come BEFORE map creation) -->
+<script src="js/map-core.js"></script>
+
+<!-- 4️⃣ STYLE (creates window.__MAP) -->
 <script src="js/map-style.js"></script>
 
-<!-- 4️⃣ LOGIC (orbit, animation, distances) -->
+<!-- 5️⃣ LOGIC (orbit, animation, journey) -->
 <script src="js/map-logic.js"></script>
 
-<!-- 5️⃣ UI (markers, popups, sidebar) -->
+<!-- 6️⃣ UI (markers, popups, HUD, sidebar) -->
 <script src="js/map-ui.js"></script>
-
-<!-- 6️⃣ CORE (orchestration — MUST COME LAST) -->
-<script src="js/map-core.js"></script>
 
 
 
 
 </body>
 </html>
+
 
 
 
