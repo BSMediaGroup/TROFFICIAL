@@ -1076,6 +1076,12 @@ window.buildCompleteUntil = buildCompleteUntil;
 window.resetJourney = resetJourney;
 window.startJourney = startJourney;
 window.addJourneySources = addJourneySources;
+// Ensure UI module sees required helper functions
+window.getLegMode = getLegMode;
+window.isFlight = isFlight;
+window.getZoom = getZoom;
+
 
 console.log("%cmap-logic.js (section 5) loaded — COMPLETE", "color:#00ff88;font-weight:bold;");
+
 
