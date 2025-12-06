@@ -740,21 +740,22 @@ function updateHUD() {
     hudNext.disabled = true;
   }
 
-/* HUD label content */
-if (next) {
-  const mode = getLegMode(currentID);
-  const icon = getModeIcon(mode);        // Always safe – includes fallback
-  const wp   = getWP(next);
+  /* HUD label content */
+  if (next) {
+    const mode = getLegMode(currentID);
+    const icon = getModeIcon(mode);     // SAFE lookup with fallback
+    const wp   = getWP(next);
 
-  const flagUrl = wp?.meta?.flag || "";  // Prevents undefined errors
+    const flagUrl = wp?.meta?.flag || "";
 
-  hudLabel.innerHTML =
-    `Next Stop: <img src="${icon}" class="hud-mode-icon"> ` +
-    `${escapeHTML(wp.location)} ` +
-    `<span class="hud-flag" style="background-image:url('${flagUrl}')"></span>`;
-} else {
-  hudLabel.textContent = "";
-}
+    hudLabel.innerHTML =
+      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ` +
+      `${escapeHTML(wp.location)} ` +
+      `<span class="hud-flag" style="background-image:url('${flagUrl}')"></span>`;
+  } else {
+    hudLabel.textContent = "";
+  }
+}   // ← ← ← THIS LINE FIXES YOUR ENTIRE MAP
 
 
 /* ============================================================
@@ -911,5 +912,6 @@ window.UI = {
 };
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
 
 
