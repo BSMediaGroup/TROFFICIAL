@@ -198,28 +198,30 @@
 
 
 
-<!-- 1️⃣ CONFIG FIRST -->
+<!-- 1️⃣ CONFIG -->
 <script src="js/map-config.js"></script>
 
-<!-- 2️⃣ THEN DATA (WAYPOINTS, ROUTES, CONSTANTS) -->
+<!-- 2️⃣ DATA -->
 <script src="js/map-data.js"></script>
 
-<!-- 3️⃣ THEN CORE (BOOTSTRAP, VALIDATION, ORDER CHECKS) -->
-<script src="js/map-core.js"></script>
-
-<!-- 4️⃣ THEN STYLE (FOG, STARFIELD, TERRAIN, NATION SHADING) -->
+<!-- 3️⃣ STYLE (creates window.__MAP) -->
 <script src="js/map-style.js"></script>
 
-<!-- 5️⃣ THEN LOGIC (ORBIT, JOURNEY MODE, CAMERA, DISTANCES) -->
+<!-- 4️⃣ LOGIC (orbit, animation, distances) -->
 <script src="js/map-logic.js"></script>
 
-<!-- 6️⃣ LAST: UI (MARKERS, POPUPS, SIDEBAR, HUD) -->
+<!-- 5️⃣ UI (markers, popups, sidebar) -->
 <script src="js/map-ui.js"></script>
+
+<!-- 6️⃣ CORE (orchestration — MUST COME LAST) -->
+<script src="js/map-core.js"></script>
+
 
 
 
 </body>
 </html>
+
 
 
 
