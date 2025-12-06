@@ -179,26 +179,17 @@
 
 
 <!-- ============================================================
-     SCRIPT MODULE LOADING — FIXED ORDER
+     SCRIPT MODULE LOADING — FIXED ORDER (MANDATORY)
 ============================================================ -->
 
-<!-- 1️⃣ CONFIG -->
 <script src="js/map-config.js"></script>
-
-<!-- 2️⃣ DATA -->
 <script src="js/map-data.js"></script>
-
-<!-- 3️⃣ STYLE (this creates window.__MAP – MUST LOAD BEFORE CORE) -->
 <script src="js/map-style.js"></script>
-
-<!-- 4️⃣ CORE (now window.__MAP exists) -->
+<script src="js/map-logic.js"></script>
+<script src="js/map-ui.js"></script>
 <script src="js/map-core.js"></script>
 
-<!-- 5️⃣ LOGIC -->
-<script src="js/map-logic.js"></script>
-
-<!-- 6️⃣ UI -->
-<script src="js/map-ui.js"></script>
 
 </body>
 </html>
+
