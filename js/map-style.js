@@ -257,3 +257,4 @@ window.__MAP = map; // other modules will use this reference
 window.enable3DBuildings = enable3DBuildings;
 window.applySunlightToWaypoint = applySunlightToWaypoint;
 window.initializeStyleLayers = initializeStyleLayers;
+
