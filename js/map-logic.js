@@ -981,6 +981,92 @@ function addJourneySources() {
 }
 
 /* ============================================================
+   MAPBOX POI SEARCH ENGINE
+   ============================================================ */
+
+async function fetchPOIs(id) {
+  const wp = getWP(id);
+  if (!wp || !Array.isArray(wp.coords)) return;
+
+  const [lon, lat] = wp.coords;
+  const types = {
+    tourist: "tourism",
+    toilets: "public_restroom,restroom,toilet",
+    hotels:  "lodging,hotel,motel,guest_house,hostel"
+  };
+
+  // Clear old results
+  document.getElementById("detailsSidebarTouristList").innerHTML = "Loading…";
+  document.getElementById("detailsSidebarToiletsList").innerHTML = "Loading…";
+  document.getElementById("detailsSidebarHotelsList").innerHTML  = "Loading…";
+
+  const limit = 5;
+
+  async function searchCategory(typeList) {
+    const url =
+      `https://api.mapbox.com/search/geocode/v6/forward` +
+      `?types=poi` +
+      `&proximity=${lon},${lat}` +
+      `&limit=${limit}` +
+      `&q=${encodeURIComponent(typeList)}` +
+      `&access_token=${mapboxgl.accessToken}`;
+
+    try {
+      const r = await fetch(url);
+      const j = await r.json();
+
+      if (!j.features || !j.features.length) return [];
+
+      return j.features.map(f => ({
+        name: f.properties.name || "Unnamed",
+        distance: f.properties.distance || 0,
+        address: f.properties.full_address || "",
+        coords: f.geometry.coordinates
+      }));
+    }
+    catch (err) {
+      console.error("POI search error:", err);
+      return [];
+    }
+  }
+
+  const [tourist, toilets, hotels] = await Promise.all([
+    searchCategory(types.tourist),
+    searchCategory(types.toilets),
+    searchCategory(types.hotels)
+  ]);
+
+  renderPOIResults("detailsSidebarTouristList", tourist);
+  renderPOIResults("detailsSidebarToiletsList", toilets);
+  renderPOIResults("detailsSidebarHotelsList", hotels);
+}
+
+/* ============================================================
+   RENDER POI RESULTS IN SIDEBAR
+   ============================================================ */
+
+function renderPOIResults(containerId, results) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  if (!results || results.length === 0) {
+    el.innerHTML = `<div class="poi-empty">No results found nearby.</div>`;
+    return;
+  }
+
+  el.innerHTML = results
+    .map(r => `
+      <div class="poi-item">
+        <div class="poi-name">${escapeHTML(r.name)}</div>
+        <div class="poi-distance">${r.distance.toFixed(0)} m away</div>
+        <div class="poi-address">${escapeHTML(r.address)}</div>
+      </div>
+    `)
+    .join("");
+}
+
+
+/* ============================================================
    EXPORT SECTION 5 (FINAL)
    ============================================================ */
 
@@ -992,3 +1078,4 @@ window.startJourney = startJourney;
 window.addJourneySources = addJourneySources;
 
 console.log("%cmap-logic.js (section 5) loaded — COMPLETE", "color:#00ff88;font-weight:bold;");
+
