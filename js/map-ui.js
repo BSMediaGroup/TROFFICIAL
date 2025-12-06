@@ -9,9 +9,9 @@ const MARKERS = {};
 const POPUPS  = {};
 const MINOR_MARKERS = [];
 
-/* ==========================================================================
-   TRAVEL MODE ICONS — Full, restored, and future-proofed
-   ========================================================================== */
+/* ========================================================================
+   TRAVEL MODE ICONS — Full, restored, future-proofed
+   ======================================================================== */
 
 const MODE_ICONS = {
   Plane:      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
@@ -24,12 +24,9 @@ const MODE_ICONS = {
   Van:        "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/van.svg"
 };
 
-/* Fallback icon (prevents undefined → broken image)
-   Used automatically if a waypoint specifies a future mode not yet added */
 const MODE_ICON_FALLBACK =
   "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg";
 
-/* Helper to safely retrieve a mode icon */
 function getModeIcon(mode) {
   return MODE_ICONS[mode] || MODE_ICON_FALLBACK;
 }
@@ -41,14 +38,12 @@ function getModeIcon(mode) {
 function buildMarkers() {
   WAYPOINTS.forEach(w => {
 
-    /* Marker DOM element */
     const el = document.createElement("div");
     el.className = "trip-marker " + w.role;
     el.innerHTML = `<img src="${w.icon}">`;
 
     setTimeout(() => el.classList.add("bounce"), 80);
 
-    /* POPUP INSTANCE */
     const popup = new mapboxgl.Popup({
       offset: 28,
       closeOnClick: true
@@ -58,7 +53,6 @@ function buildMarkers() {
 
     POPUPS[w.id] = popup;
 
-    /* MAPBOX MARKER */
     const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
       .setLngLat(w.coords)
       .addTo(window.__MAP);
@@ -67,13 +61,10 @@ function buildMarkers() {
 
     if (w.role === "minor") MINOR_MARKERS.push(marker);
 
-    /* ========================================================
-       SINGLE CLICK — TOP-DOWN FOCUS
-       ======================================================== */
+    /* Single click */
     el.addEventListener("click", ev => {
       ev.stopPropagation();
       stopOrbit();
-
       openPopupFor(w.id);
       currentID = w.id;
 
@@ -86,9 +77,7 @@ function buildMarkers() {
       });
     });
 
-    /* ========================================================
-       DOUBLE CLICK — ORBIT FOCUS
-       ======================================================== */
+    /* Double click → orbit */
     el.addEventListener("dblclick", ev => {
       ev.stopPropagation();
       openPopupFor(w.id);
@@ -98,15 +87,13 @@ function buildMarkers() {
 
   });
 
-  /* Clicking on map background closes popups + orbit */
+  /* Click on background */
   window.__MAP.on("click", () => {
     closeAllPopups();
     stopOrbit();
   });
 
-  /* ========================================================
-     MINOR MARKER VISIBILITY BY ZOOM
-     ======================================================== */
+  /* Minor marker visibility */
   function updateMinorMarkers() {
     const show = window.__MAP.getZoom() >= 5;
     MINOR_MARKERS.forEach(m => {
@@ -134,12 +121,11 @@ function buildPopupHTML(w) {
   const totalKm = TRAVELLED_KM[TRIP_ORDER.at(-1)];
 
   const mode     = getLegMode(w.id);
-  const locLabel = w.location || "";
   const flagUrl  = w.meta?.flag || "";
+  const locLabel = w.location || "";
 
   let navHTML = "";
 
-  /* Previous button */
   if (prev) {
     navHTML += `
       <span class="trip-popup-nav-link" data-dir="prev" data-target="${prev}">
@@ -148,13 +134,10 @@ function buildPopupHTML(w) {
     `;
   }
 
-  /* Next button */
   if (next) {
     const dist = LEG_DIST[w.id];
     let label = "";
-    if (dist) {
-      label = ` – ${dist.mi}mi <span style="color:#A3A3A3">(${dist.km}km)</span>`;
-    }
+    if (dist) label = ` – ${dist.mi}mi <span style="color:#A3A3A3">(${dist.km}km)</span>`;
 
     navHTML += `
       <span class="trip-popup-nav-link" data-dir="next" data-target="${next}">
@@ -164,7 +147,6 @@ function buildPopupHTML(w) {
     `;
   }
 
-  /* Details button */
   navHTML += `
     <span class="trip-popup-nav-link details-btn" data-details="${w.id}">
       <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/exp.svg"
@@ -173,7 +155,6 @@ function buildPopupHTML(w) {
     </span>
   `;
 
-  /* Reset option on final destination */
   if (w.id === "tomsriver") {
     navHTML += `
       <span class="trip-popup-nav-link" data-reset="1">
@@ -184,6 +165,7 @@ function buildPopupHTML(w) {
 
   return `
     <div class="trip-popup">
+
       <div class="trip-popup-title">
         <img src="${w.icon}" class="trip-popup-title-icon">
         <span>${escapeHTML(w.names?.display || w.id)}</span>
@@ -194,9 +176,7 @@ function buildPopupHTML(w) {
         <span class="trip-popup-flag" style="background-image:url('${flagUrl}')"></span>
       </div>
 
-      <div class="trip-popup-body">
-        ${escapeHTML(w.description || "")}
-      </div>
+      <div class="trip-popup-body">${escapeHTML(w.description || "")}</div>
 
       <div class="trip-popup-travelled">
         Travelled: ${tMi} / ${totalMi}mi
@@ -205,15 +185,13 @@ function buildPopupHTML(w) {
 
       <div class="trip-popup-divider"></div>
 
-      <div class="trip-popup-nav">
-        ${navHTML}
-      </div>
+      <div class="trip-popup-nav">${navHTML}</div>
     </div>
   `;
 }
 
 /* ============================================================
-   POPUP OPEN/CLOSE LOGIC
+   POPUP OPEN/CLOSE
    ============================================================ */
 
 function closeAllPopups() {
@@ -226,7 +204,7 @@ function openPopupFor(id) {
   if (p) p.addTo(window.__MAP);
 }
 
-/* Fix ARIA glitch */
+/* Fix ARIA warning */
 document.addEventListener("DOMNodeInserted", e => {
   if (e.target.classList?.contains("mapboxgl-popup-close-button")) {
     e.target.removeAttribute("aria-hidden");
@@ -234,10 +212,10 @@ document.addEventListener("DOMNodeInserted", e => {
 });
 
 /* ============================================================
-   POPUP NAVIGATION CLICK HANDLING
+   POPUP NAVIGATION CLICK HANDLER
    ============================================================ */
 
-document.addEventListener("click", function (ev) {
+document.addEventListener("click", ev => {
   const link = ev.target.closest(".trip-popup-nav-link");
   if (!link) return;
 
@@ -247,10 +225,7 @@ document.addEventListener("click", function (ev) {
   const dir   = link.dataset.dir;
   const tgt   = link.dataset.target;
 
-  if (reset) {
-    resetJourney();
-    return;
-  }
+  if (reset) return resetJourney();
   if (!dir || !tgt) return;
 
   if (!journeyMode) {
@@ -271,23 +246,19 @@ document.addEventListener("click", function (ev) {
   }
 
   if (dir === "next") animateLeg(currentID, tgt);
-  else if (dir === "prev") undoTo(tgt);
+  else undoTo(tgt);
 });
 
 /* EXPORT SECTION 1 */
 window.buildMarkers = buildMarkers;
 window.buildPopupHTML = buildPopupHTML;
-window.openPopupFor = openPopupFor;
+window.openPopupFor   = openPopupFor;
 window.closeAllPopups = closeAllPopups;
 
 
 /* ============================================================
    MAP UI MODULE — v2
    SECTION 2 — DETAILS SIDEBAR UI
-   ============================================================ */
-
-/* ============================================================
-   SIDEBAR DOM ELEMENTS
    ============================================================ */
 
 const detailsOverlay          = document.getElementById("detailsOverlay");
@@ -312,6 +283,7 @@ const detailsHudNext          = document.getElementById("detailsHudNext");
 const detailsHudLabel         = document.getElementById("detailsHudLabel");
 const detailsClose            = document.getElementById("detailsSidebarClose");
 
+
 /* ============================================================
    LOCATION INFO PANEL
    ============================================================ */
@@ -328,7 +300,7 @@ function renderLocationInfo(wp) {
   const localTime = formatLocalTime(wp);
   const tzDisplay = formatTimeZoneWithOffset(wp);
 
-  const countryFlag = flagUrl
+  const flag = flagUrl
     ? `<img src="${flagUrl}" style="width:20px;height:14px;border-radius:2px;border:1px solid #fff;">`
     : "";
 
@@ -345,8 +317,8 @@ function renderLocationInfo(wp) {
 
     <div class="details-location-row">
       <div class="details-kv-label">Country</div>
-      <div class="details-kv-value" style="display:flex; justify-content:flex-end; gap:6px; align-items:center;">
-        ${countryFlag}
+      <div class="details-kv-value" style="display:flex;justify-content:flex-end;gap:6px;align-items:center;">
+        ${flag}
         ${escapeHTML(country)}
       </div>
     </div>
@@ -372,6 +344,7 @@ function renderLocationInfo(wp) {
     </div>
   `;
 }
+
 
 /* ============================================================
    WEATHER PANEL
@@ -408,7 +381,6 @@ function renderWeather(wp) {
 
       const tempC = cw.temperature;
       const tempF = +(tempC * 9/5 + 32).toFixed(1);
-
       const windK = cw.windspeed;
       const windM = +(windK * 0.621371).toFixed(1);
 
@@ -432,13 +404,14 @@ function renderWeather(wp) {
         </div>
       `;
     })
-
     .catch(() => {
       if (detailsSidebar.dataset.currentId !== requestId) return;
+
       detailsWeatherContent.innerHTML =
         `<div class="details-weather-error">Weather unavailable.</div>`;
     });
 }
+
 
 /* ============================================================
    DISTANCE PANEL
@@ -489,6 +462,7 @@ function renderDistance(wp) {
   detailsDistanceContent.innerHTML = html;
 }
 
+
 /* ============================================================
    SIDEBAR HUD LOGIC
    ============================================================ */
@@ -519,7 +493,6 @@ function updateDetailsHud() {
   const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
 
   if (detailsHudPrev) detailsHudPrev.disabled = !prev;
-
   if (detailsHudNext) {
     detailsHudNext.textContent = "Next Stop";
     detailsHudNext.disabled = !next;
@@ -534,14 +507,15 @@ function updateDetailsHud() {
       const icon = getModeIcon(mode);
 
       detailsHudLabel.innerHTML =
-        `Next Stop: <img src="${getModeIcon(mode)}" class="details-sidebar-hud-mode-icon"> ${escapeHTML(wpNext.location)}
+        `Next Stop: <img src="${icon}" class="details-sidebar-hud-mode-icon"> ${escapeHTML(wpNext.location)}
          <span class="details-sidebar-hud-flag" style="background-image:url('${wpNext.meta.flag}')"></span>`;
     }
   }
 }
 
+
 /* ============================================================
-   SIDEBAR OPEN FUNCTION
+   OPEN SIDEBAR
    ============================================================ */
 
 function openDetailsSidebar(id) {
@@ -552,13 +526,12 @@ function openDetailsSidebar(id) {
 
   detailsTitle.textContent = w.names?.display || "Unknown Location";
 
-  if (detailsIcon) {
-    detailsIcon.src = w.icon || "";
-    detailsIcon.alt = w.names?.display || "Waypoint icon";
-  }
+  detailsIcon.src = w.icon || "";
+  detailsIcon.alt = w.names?.display || "Waypoint icon";
 
   const locLabel = w.location || "";
   const flagUrl  = w.meta?.flag || "";
+
   const flagSpan = flagUrl
     ? `<span class="details-location-flag-inline" style="background-image:url('${flagUrl}')"></span>`
     : "";
@@ -567,7 +540,6 @@ function openDetailsSidebar(id) {
     `<span class="details-location-header-line">${escapeHTML(locLabel)} ${flagSpan}</span>`;
 
   detailsDescription.textContent = w.description || "";
-
   detailsImage.src = w.image || "";
   detailsImage.alt = w.names?.display || "Waypoint image";
 
@@ -578,19 +550,17 @@ function openDetailsSidebar(id) {
   renderLocationInfo(w);
   renderWeather(w);
   renderDistance(w);
-
   updateDetailsHud();
 
-  // NEW
-  fetchPOIs(id);
+  fetchPOIs(id); // Stub
 
-  // show sidebar
   detailsSidebar.classList.add("open");
   if (detailsOverlay) detailsOverlay.classList.add("open");
 }
 
+
 /* ============================================================
-   SIDEBAR CLOSE
+   CLOSE SIDEBAR
    ============================================================ */
 
 function closeDetailsSidebar() {
@@ -609,26 +579,25 @@ if (detailsOverlay) {
   });
 }
 
-/* Close sidebar if clicking outside it */
+/* Outside click closes sidebar */
 document.addEventListener("click", (e) => {
   if (!detailsSidebar.classList.contains("open")) return;
 
   if (e.target.closest(".details-btn")) return;
-
   if (detailsSidebar.contains(e.target)) return;
 
   closeDetailsSidebar();
 });
 
-/* ESC key closes the sidebar */
-document.addEventListener("keydown", (e) => {
+/* ESC key closes sidebar */
+document.addEventListener("keydown", e => {
   if (e.key === "Escape" && detailsSidebar.classList.contains("open")) {
     closeDetailsSidebar();
   }
 });
 
-/* “Details” buttons inside popups */
-document.addEventListener("click", (e) => {
+/* Popup → Details button */
+document.addEventListener("click", e => {
   const btn = e.target.closest(".details-btn");
   if (!btn) return;
 
@@ -638,13 +607,15 @@ document.addEventListener("click", (e) => {
   openDetailsSidebar(id);
 });
 
+
 /* ============================================================
-   SIDEBAR PREV/NEXT BUTTONS
+   SIDEBAR PREV/NEXT
    ============================================================ */
 
 if (detailsHudPrev) {
   detailsHudPrev.addEventListener("click", () => {
     if (!journeyMode) return;
+
     const idx = TRIP_ORDER.indexOf(currentID);
     if (idx > 0) {
       const targetId = TRIP_ORDER[idx - 1];
@@ -659,6 +630,7 @@ if (detailsHudPrev) {
 if (detailsHudNext) {
   detailsHudNext.addEventListener("click", () => {
     if (!journeyMode) return;
+
     const idx = TRIP_ORDER.indexOf(currentID);
     if (idx < TRIP_ORDER.length - 1) {
       const targetId = TRIP_ORDER[idx + 1];
@@ -667,28 +639,25 @@ if (detailsHudNext) {
   });
 }
 
-/* Ensure sidebar HUD stays synced with main HUD */
+/* Sync sidebar HUD with global HUD */
 const _origUpdateHUD = updateHUD;
 updateHUD = function () {
   _origUpdateHUD();
   updateDetailsHud();
 };
 
+
 /* EXPORT SECTION 2 */
 window.openDetailsSidebar = openDetailsSidebar;
 window.closeDetailsSidebar = closeDetailsSidebar;
-window.renderWeather = renderWeather;
-window.renderDistance = renderDistance;
-window.renderLocationInfo = renderLocationInfo;
+window.renderWeather       = renderWeather;
+window.renderDistance      = renderDistance;
+window.renderLocationInfo  = renderLocationInfo;
 
 
 /* ============================================================
    MAP UI MODULE — v2
-   SECTION 3 — HUD + GLOBAL UI CONTROLS
-   ============================================================ */
-
-/* ============================================================
-   MAIN JOURNEY HUD ELEMENTS
+   SECTION 3 — MAIN HUD
    ============================================================ */
 
 const hud      = document.getElementById("journeyHud");
@@ -696,20 +665,17 @@ const hudPrev  = document.getElementById("hudPrev");
 const hudNext  = document.getElementById("hudNext");
 const hudLabel = document.getElementById("hudLabel");
 
-/* ============================================================
-   HELPER: Get simplified location label (matches original)
-   ============================================================ */
-
 function getHudLocationLabel(wp) {
-  return getLocationLabel(wp);   // Provided in your original code
+  return getLocationLabel(wp);
 }
 
 function getHudCountryCode(wp) {
-  return getCountryCode(wp);     // Provided in your original code
+  return getCountryCode(wp);
 }
 
+
 /* ============================================================
-   MAIN HUD UPDATE LOGIC
+   MAIN HUD UPDATE
    ============================================================ */
 
 function updateHUD() {
@@ -724,10 +690,8 @@ function updateHUD() {
   const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
   const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
 
-  /* Previous button */
   hudPrev.disabled = !prev;
 
-  /* Next button */
   if (next) {
     const d = LEG_DIST[currentID];
     let distLabel = "";
@@ -740,22 +704,19 @@ function updateHUD() {
     hudNext.disabled = true;
   }
 
-  /* HUD label content */
   if (next) {
     const mode = getLegMode(currentID);
-    const icon = getModeIcon(mode);     // SAFE lookup with fallback
+    const icon = getModeIcon(mode);
     const wp   = getWP(next);
-
     const flagUrl = wp?.meta?.flag || "";
 
     hudLabel.innerHTML =
-      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ` +
-      `${escapeHTML(wp.location)} ` +
+      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(wp.location)} ` +
       `<span class="hud-flag" style="background-image:url('${flagUrl}')"></span>`;
   } else {
     hudLabel.textContent = "";
   }
-}   // ← ← ← THIS LINE FIXES YOUR ENTIRE MAP
+}
 
 
 /* ============================================================
@@ -774,8 +735,9 @@ hudNext.addEventListener("click", () => {
   if (idx < TRIP_ORDER.length - 1) animateLeg(currentID, TRIP_ORDER[idx + 1]);
 });
 
+
 /* ============================================================
-   JOURNEY BUTTON VISIBILITY STATE
+   JOURNEY BUTTON VISIBILITY
    ============================================================ */
 
 function updateSidebarJourneyState() {
@@ -791,8 +753,9 @@ function updateSidebarJourneyState() {
   }
 }
 
+
 /* ============================================================
-   RESET / STATIC MAP UI BEHAVIOUR
+   STATIC MAP RESET UI
    ============================================================ */
 
 function showResetButton() {
@@ -807,111 +770,68 @@ function hideResetButton() {
   if (resetBtn) resetBtn.style.display = "none";
 }
 
-/* Hook: Stop spin on click also shows reset button
-   — this mirrors original behaviour from map-logic.js */
 window.__MAP.on("mousedown", () => {
   if (!journeyMode) showResetButton();
 });
 
-/* ============================================================
-   UI GLUE — WHEN HUD UPDATES, SIDEBAR HUD MUST FOLLOW
-   ============================================================ */
 
+/* Sync sidebar HUD */
 const _originalHUD = updateHUD;
 updateHUD = function () {
   _originalHUD();
-  if (typeof updateDetailsHud === "function") {
-    updateDetailsHud();
-  }
+  if (typeof updateDetailsHud === "function") updateDetailsHud();
 };
 
+
 /* EXPORT SECTION 3 */
-window.updateHUD = updateHUD;
+window.updateHUD               = updateHUD;
 window.updateSidebarJourneyState = updateSidebarJourneyState;
-window.showResetButton = showResetButton;
-window.hideResetButton = hideResetButton;
+window.showResetButton         = showResetButton;
+window.hideResetButton         = hideResetButton;
 
 
 /* ============================================================
    MAP UI MODULE — v2
-   SECTION 4 — POI HOOKS + MODULE EXPORTS
+   SECTION 4 — POI HOOKS (SAFE)
    ============================================================ */
-
-/* ============================================================
-   MAPBOX POI LOOKUP (STUB IMPLEMENTATION)
-   ============================================================ */
-/*
-   These functions prepare for fully-native Mapbox amenity data.
-
-   DO NOT ENABLE until approved.
-
-   Once approved, we will:
-   - Hit Mapbox Search API (forward & category endpoints)
-   - Fetch hotels, toilets, attractions dynamically per waypoint
-   - Populate collapsible sections or "More" links
-   - Remove the old Google Maps fallback entirely
-
-   For now these functions safely NO-OP.
-*/
 
 async function fetchMapboxPOI(wp, category) {
-  // Future: Mapbox Search API integration
-  // Example categories: "hotel", "toilet", "tourist_attraction"
-  return null;
+  return null; // Stub
 }
 
 async function updateSidebarPOISections(wp) {
-  // Called on every openDetailsSidebar()
-  // Will populate POI collapsibles once enabled.
-  return;
+  return; // Stub
 }
 
-/* ============================================================
-   OVERRIDE THE DETAILS SIDEBAR HOOK TO PREP FOR POI
-   ============================================================ */
-
-const _origOpenDetailsSidebar = openDetailsSidebar;
-
+const _origOpenDS = openDetailsSidebar;
 openDetailsSidebar = async function (id) {
-  _origOpenDetailsSidebar(id);
-
+  _origOpenDS(id);
   const wp = WAYPOINTS.find(x => x.id === id);
   if (!wp) return;
-
-  // POI hook — currently does nothing until we activate Mapbox Search API
   await updateSidebarPOISections(wp);
 };
 
-/* ============================================================
-   FINAL EXPORTS FOR map-ui.js
-   ============================================================ */
 
+/* FINAL EXPORTS */
 window.UI = {
-  /* Section 1 */
   buildMarkers,
   buildPopupHTML,
   openPopupFor,
   closeAllPopups,
 
-  /* Section 2 */
   openDetailsSidebar,
   closeDetailsSidebar,
   renderWeather,
   renderDistance,
   renderLocationInfo,
 
-  /* Section 3 */
   updateHUD,
   updateSidebarJourneyState,
   showResetButton,
   hideResetButton,
 
-  /* Section 4 (future POI features) */
   fetchMapboxPOI,
   updateSidebarPOISections
 };
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
-
-
-
