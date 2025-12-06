@@ -1,127 +1,107 @@
 /* ============================================================
-   MAPBOX CONFIG / CONSTANTS / GLOBAL HELPERS — v2
-   This module contains ONLY:
-   - Access token
-   - Base constants
-   - Utility functions (string escaping, haversine, rad↔deg, normalization, etc.)
-   - Shared mappings (mode icons, currencies)
-   NOTE:
-   No UI or map style logic belongs here.
-   No journey logic belongs here.
+   MAP CONFIG MODULE — v2
+   Contains:
+   - Static constants used across all modules
+   - Default zoom, rotation, pitch, and behaviour settings
+   - Trip ordering & driving ordering
+   - Mode icon mapping
    ============================================================ */
 
-/* ========================= ACCESS TOKEN ========================= */
-mapboxgl.accessToken = "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
+console.log("map-config.js loaded");
 
-/* ========================= GLOBAL CONSTANTS ========================= */
+/* ============================================================
+   DEFAULT MAP VIEW SETTINGS
+   ============================================================ */
 
-const DEFAULT_CENTER = [245, 20];   // Australia visible
-const DEFAULT_ZOOM   = 2.8;
+window.DEFAULT_CENTER = [ -100, 40 ];        // unchanged from original
+window.DEFAULT_ZOOM   = 1.65;
 
-let spinning        = true;
-let userInterrupted = false;
-let journeyMode     = false;
-let currentID       = null;
-let MAP_READY       = false;
+/* Used by reset, initial spin, journey start */
+window.MAP_READY = false;
 
-/* Orbit globals used everywhere */
-let orbitingId      = null;
-let orbitAnim       = null;
-let orbitEnterTimer = null;
+/* Global interaction state */
+window.spinning         = true;
+window.userInterrupted  = false;
+window.journeyMode      = false;
+window.currentID        = null;
 
-/* Set of markers always visible regardless of zoom */
-const ALWAYS_VISIBLE = new Set(["sydney", "toronto", "tomsriver"]);
+/* ============================================================
+   ORBIT CAMERA CONSTANTS
+   ============================================================ */
 
-/* Icons for travel modes */
-const MODE_ICONS = {
-  Plane: "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
-  Car:   "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/car1.svg"
+window.ORBIT_ZOOM_TARGET    = 12.5;
+window.ORBIT_PITCH_TARGET   = 75;   // manual orbit pitch
+window.ORBIT_ROTATION_SPEED = 0.03; // deg per frame
+window.ORBIT_ENTRY_DURATION = 900;
+
+/* ============================================================
+   JOURNEY CAMERA CONSTANTS
+   ============================================================ */
+
+window.JOURNEY_PITCH_TARGET = 55;
+
+window.JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;  
+window.JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5;
+
+/* ============================================================
+   TRIP ORDER (MAIN WAYPOINT SEQUENCE)
+   ============================================================ */
+
+window.TRIP_ORDER = [
+  "sydney",
+  "la",
+  "toronto",
+  "niagara",
+  "cleveland",
+  "pittsburgh",
+  "philadelphia",
+  "tomsriver"
+];
+
+/* ============================================================
+   DRIVING ORDER (FOR MAPBOX DIRECTIONS API)
+   ============================================================ */
+
+window.DRIVE_ORDER = [
+  "toronto",
+  "niagara",
+  "cleveland",
+  "pittsburgh",
+  "philadelphia",
+  "tomsriver"
+];
+
+/* ============================================================
+   MODE ICONS (USED IN HUD + POPUPS)
+   ============================================================ */
+
+window.MODE_ICONS = {
+  "Plane":  "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
+  "Drive":  "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/car.svg"
 };
 
-/* Legend toggle icons */
-const LEGEND_EXPAND_ICON =
-  "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/expand.svg";
-const LEGEND_COLLAPSE_ICON =
-  "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/collapse.svg";
+/* ============================================================
+   CURRENCY MAP (REQUIRED BY LOCATION PANEL)
+   ============================================================ */
 
-/* Orbit & camera config */
-const ORBIT_ZOOM_TARGET    = 12.5;
-const ORBIT_PITCH_TARGET   = 75;
-const ORBIT_ROTATION_SPEED = 0.03;
-const ORBIT_ENTRY_DURATION = 900;
+window.CURRENCY_INFO = {
+  "AU": { code: "AUD", name: "Australian Dollar",    symbol: "A$"  },
+  "US": { code: "USD", name: "United States Dollar", symbol: "US$" },
+  "CA": { code: "CAD", name: "Canadian Dollar",      symbol: "CA$" }
+};
 
-const JOURNEY_PITCH_TARGET = 55;
-const JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;
-const JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5;
+/* Helper used by details panel */
+window.getCurrencyInfo = function (countryCode) {
+  return CURRENCY_INFO[countryCode] ||
+    { code: "—", name: "Unknown currency", symbol: "?" };
+};
 
-/* ============================================
-   UTILITY: SAFE STRING ESCAPE
-   ============================================ */
-function escapeHTML(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+/* ============================================================
+   TIMEZONE DISPLAY HELPERS
+   ============================================================ */
 
-/* ============================================
-   UTILITY: NORMALIZE COORDINATE
-   Keeps lon within [-180,180], clamps latitude
-   ============================================ */
-function normalizeCoord(lon, lat) {
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-
-  lon = ((lon + 180) % 360 + 360) % 360 - 180;
-  lat = Math.max(-89.999999, Math.min(89.999999, lat));
-
-  return [lon, lat];
-}
-
-/* ============================================
-   UTILITY: DEG ↔ RAD
-   ============================================ */
-function toRad(deg) { return deg * Math.PI / 180; }
-function toDeg(rad) { return rad * 180 / Math.PI; }
-
-/* ============================================
-   HAVERSINE DISTANCE (km)
-   Identical to original implementation
-   ============================================ */
-function haversine(a, b) {
-  const R = 6371;
-  const toR = d => d * Math.PI / 180;
-
-  const dLat = toR(b[1] - a[1]);
-  const dLon = toR(b[0] - a[0]);
-  const lat1 = toR(a[1]);
-  const lat2 = toR(b[1]);
-
-  const h = Math.sin(dLat / 2) ** 2 +
-            Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-/* ============================================
-   CURRENCY MAP
-   Identical to original behaviour
-   ============================================ */
-function getCurrencyInfo(countryCode) {
-  const map = {
-    "AU": { code: "AUD", name: "Australian Dollar",      symbol: "A$" },
-    "US": { code: "USD", name: "United States Dollar",   symbol: "US$" },
-    "CA": { code: "CAD", name: "Canadian Dollar",        symbol: "CA$" }
-  };
-  return map[countryCode] || { code: "—", name: "Unknown currency", symbol: "?" };
-}
-
-/* ============================================
-   LOCAL TIME FORMATTER
-   ============================================ */
-function formatLocalTime(wp) {
-  const tz     = wp.meta?.timezone;
+window.formatLocalTime = function (wp) {
+  const tz = wp.meta?.timezone;
   const locale = wp.meta?.locale || "en-US";
 
   if (!tz) return "Time unavailable";
@@ -145,13 +125,10 @@ function formatLocalTime(wp) {
   } catch {
     return "Time unavailable";
   }
-}
+};
 
-/* ============================================
-   TIMEZONE + UTC OFFSET FORMATTER
-   ============================================ */
-function formatTimeZoneWithOffset(wp) {
-  const tz     = wp.meta?.timezone;
+window.formatTimeZoneWithOffset = function (wp) {
+  const tz = wp.meta?.timezone;
   const locale = wp.meta?.locale || "en-US";
 
   if (!tz) return "N/A";
@@ -174,34 +151,57 @@ function formatTimeZoneWithOffset(wp) {
   } catch {
     return tz;
   }
-}
+};
 
-/* ============================================
-   WEATHER CODE → LABEL + ICON
-   Direct from original implementation
-   ============================================ */
-function mapWeatherCodeToInfo(code) {
+/* ============================================================
+   WEATHER ICON MAPPING
+   ============================================================ */
+
+window.mapWeatherCodeToInfo = function (code) {
   const c = Number(code);
+
   if (isNaN(c)) return { label: "Unknown conditions", icon: "?" };
 
   if (c === 0) return { label: "Clear sky", icon: "☀️" };
   if (c === 1 || c === 2) return { label: "Mostly clear", icon: "🌤️" };
   if (c === 3) return { label: "Overcast", icon: "☁️" };
+
   if (c === 45 || c === 48) return { label: "Fog / low clouds", icon: "🌫️" };
   if (c >= 51 && c <= 55) return { label: "Drizzle", icon: "🌦️" };
   if (c >= 61 && c <= 65) return { label: "Rain", icon: "🌧️" };
+
   if (c === 66 || c === 67) return { label: "Freezing rain", icon: "🌧️" };
-  if (c >= 71 && c <= 75) return { label: "Snow", icon: "🌨️" };
+
+  if (c >= 71 && c <= 75) return { label: "Snow", icon: "❄️" };
   if (c === 77) return { label: "Snow grains", icon: "❄️" };
+
   if (c >= 80 && c <= 82) return { label: "Rain showers", icon: "🌦️" };
   if (c === 85 || c === 86) return { label: "Snow showers", icon: "🌨️" };
+
   if (c === 95) return { label: "Thunderstorm", icon: "⛈️" };
   if (c === 96 || c === 99) return { label: "Thunderstorm with hail", icon: "⛈️" };
 
   return { label: "Conditions unknown", icon: "?" };
-}
+};
 
-/* ============================================
-   EXPORT-SAFE GLOBALS (if future ES modules)
-   ============================================ */
-console.log("map-config.js loaded");
+/* ============================================================
+   EXPORT CONFIG MODULE
+   ============================================================ */
+
+window.CONFIG = {
+  DEFAULT_CENTER,
+  DEFAULT_ZOOM,
+  ORBIT_ZOOM_TARGET,
+  ORBIT_PITCH_TARGET,
+  ORBIT_ROTATION_SPEED,
+  ORBIT_ENTRY_DURATION,
+  JOURNEY_PITCH_TARGET,
+  JOURNEY_ZOOM_DEFAULT,
+  JOURNEY_ZOOM_LA,
+  TRIP_ORDER,
+  DRIVE_ORDER,
+  MODE_ICONS,
+  CURRENCY_INFO
+};
+
+console.log("%cmap-config.js fully loaded", "color:#00e5ff;font-weight:bold;");
