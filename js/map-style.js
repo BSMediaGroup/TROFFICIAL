@@ -8,15 +8,8 @@ console.log("map-style.js loaded");
    MAP INSTANCE (style / projection only)
    ============================================================ */
 
-const map = new mapboxgl.Map({
-  container: "map",
-  style: "mapbox://styles/mapbox/dark-v11",
-  center: DEFAULT_CENTER,
-  zoom: DEFAULT_ZOOM,
-  pitch: 0,
-  renderWorldCopies: false,
-  projection: "globe"
-});
+const map = window.__MAP;
+
 
 /* Navigation controls identical to original */
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
@@ -242,3 +235,4 @@ window.applySunlightToWaypoint = applySunlightToWaypoint;
 window.initializeStyleLayers = initializeStyleLayers;
 
 console.log("map-style.js fully loaded");
+
