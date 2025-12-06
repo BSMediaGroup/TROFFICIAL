@@ -257,10 +257,8 @@ window.__MAP = map; // other modules will use this reference
 window.enable3DBuildings = enable3DBuildings;
 window.applySunlightToWaypoint = applySunlightToWaypoint;
 window.initializeStyleLayers = initializeStyleLayers;
-// ===================== EXPORTS (Required!) =====================
-window.MAP_STYLE_URL = MAP_STYLE_URL;
-window.LIGHT_STYLE   = LIGHT_STYLE;
-window.DARK_STYLE    = DARK_STYLE;
+
+
 
 
 
