@@ -1,22 +1,21 @@
-/* ============================================================
-   MAP STYLE INITIALIZATION — v2 (defensive)
-   ============================================================ */
+/* ======================================================================= */
+/* ============================= MAP STYLE ================================ */
+/* ======================================================================= */
 
 console.log("map-style.js loaded");
 
-/* ============================================================
-   MAP INSTANCE (style / projection only)
-   ============================================================ */
-
+/* Grab the ONE TRUE MAP INSTANCE created in map-core.js */
 const map = window.__MAP;
 
+if (!map) {
+  console.error("map-style.js: ❌ window.__MAP is missing. Abort.");
+} else {
+  console.log("map-style.js: ✓ Attached to existing map");
+}
 
-/* Navigation controls identical to original */
-map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
-
-/* ============================================================
-   FOG / STARFIELD
-   ============================================================ */
+/* ======================================================================= */
+/* ===================== FOG + STARFIELD (STATIC) ======================== */
+/* ======================================================================= */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
 const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";
@@ -34,205 +33,60 @@ map.on("style.load", () => {
   });
 });
 
-/* ============================================================
-   TERRAIN (stub – can be enabled later)
-   ============================================================ */
+/* ======================================================================= */
+/* =========================== NATION SHADING ============================ */
+/* ======================================================================= */
 
-function enableTerrain() {
-  // Placeholder for DEM source / terrain.
-  // Left disabled for stability.
-}
-
-/* ============================================================
-   3D BUILDINGS TOGGLE
-   ============================================================ */
-
-let buildingsEnabled = false;
-
-function enable3DBuildings() {
-  if (buildingsEnabled) return;
-  buildingsEnabled = true;
-
-  const style = map.getStyle();
-  if (!style || !style.layers) return;
-
-  let labelLayerId = null;
-  for (const layer of style.layers) {
-    if (layer.type === "symbol" && layer.layout && layer.layout["text-field"]) {
-      labelLayerId = layer.id;
-      break;
-    }
-  }
-
-  if (map.getLayer("3d-buildings")) return;
-
-  map.addLayer(
-    {
-      id: "3d-buildings",
-      source: "composite",
-      "source-layer": "building",
-      type: "fill-extrusion",
-      minzoom: 14,
-      paint: {
-        "fill-extrusion-color": "#aaa",
-        "fill-extrusion-height": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          14, 0,
-          15, ["get", "height"]
-        ],
-        "fill-extrusion-base": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          14, 0,
-          15, ["get", "min_height"]
-        ],
-        "fill-extrusion-opacity": 0.6
-      }
-    },
-    labelLayerId
-  );
-}
-
-/* ============================================================
-   SUNLIGHT SYSTEM (stub)
-   ============================================================ */
-
-function computeSunDirectionForWaypoint(wp) {
-  try {
-    const now = new Date();
-    const tz = wp.meta?.timezone;
-
-    const hour = Number(
-      new Intl.DateTimeFormat("en-US", {
-        timeZone: tz,
-        hour: "numeric",
-        hour12: false
-      }).format(now)
-    );
-
-    const altitude = Math.max(5, Math.min(60, (hour - 6) * 10));
-    const azimuth  = hour * 15;
-
-    return { altitude, azimuth };
-  } catch {
-    return { altitude: 45, azimuth: 180 };
-  }
-}
-
-function applySunlightToWaypoint(wp) {
-  const { altitude, azimuth } = computeSunDirectionForWaypoint(wp);
-
-  map.setLight({
-    anchor: "viewport",
-    position: [azimuth, altitude],
-    intensity: 0.6
-  });
-}
-
-/* ============================================================
-   NATION SHADING — SAFE / IDEMPOTENT
-   ============================================================ */
-
-/**
- * Adds a polygon fill + outline for one nation.
- * Now idempotent: if the source or layers already exist, it logs a
- * warning and returns instead of throwing.
- */
 async function addNation(id, url, color, opacity) {
   try {
-    // HARD CHECK: prevent duplicate sources
     if (map.getSource(id)) {
-      console.warn(`⚠️ Nation source "${id}" already exists – skipping addNation()`);
+      console.warn(`map-style.js: Skipped duplicate source '${id}'`);
       return;
     }
 
-    const res = await fetch(url);
-    const geo = await res.json();
+    const geo = await (await fetch(url)).json();
 
     map.addSource(id, { type: "geojson", data: geo });
 
-    // Fill layer (safe)
-    const fillId = id + "-fill";
-    if (!map.getLayer(fillId)) {
-      map.addLayer({
-        id: fillId,
-        type: "fill",
-        source: id,
-        paint: {
-          "fill-color": color,
-          "fill-opacity": opacity
-        }
-      });
-    }
+    map.addLayer({
+      id: `${id}-fill`,
+      type: "fill",
+      source: id,
+      paint: {
+        "fill-color": color,
+        "fill-opacity": opacity
+      }
+    });
 
-    // Outline layer (safe)
-    const outlineId = id + "-outline";
-    if (!map.getLayer(outlineId)) {
-      map.addLayer({
-        id: outlineId,
-        type: "line",
-        source: id,
-        paint: {
-          "line-color": color,
-          "line-width": 1.2
-        }
-      });
-    }
+    map.addLayer({
+      id: `${id}-outline`,
+      type: "line",
+      source: id,
+      paint: {
+        "line-color": color,
+        "line-width": 1.2
+      }
+    });
+
   } catch (err) {
-    console.error("Nation load error (id=" + id + "):", err);
+    console.error("Nation load error:", err);
   }
 }
 
-/* ============================================================
-   STYLE INITIALIZATION ENTRYPOINT
-   Called from map-core.js AFTER map.on("load")
-   ============================================================ */
+window.initializeStyleLayers = async function () {
+  console.log("map-style.js: initializeStyleLayers()");
 
-let nationsInitialized = false;
-
-async function initializeStyleLayers() {
-  // Make this safe to call multiple times
-  if (nationsInitialized) {
-    return;
-  }
-  nationsInitialized = true;
-
-  // Optional terrain:
-  // enableTerrain();
-
-  await addNation(
-    "aus",
+  await addNation("aus",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
-    "#1561CF",
-    0.12
-  );
+    "#1561CF", 0.12);
 
-  await addNation(
-    "can",
+  await addNation("can",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json",
-    "#CE2424",
-    0.12
-  );
+    "#CE2424", 0.12);
 
-  await addNation(
-    "usa",
+  await addNation("usa",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json",
-    "#FFFFFF",
-    0.12
-  );
-}
-
-/* ============================================================
-   EXPORTS
-   ============================================================ */
-
-window.__MAP = map; // main map reference
-window.enable3DBuildings = enable3DBuildings;
-window.applySunlightToWaypoint = applySunlightToWaypoint;
-window.initializeStyleLayers = initializeStyleLayers;
+    "#FFFFFF", 0.12);
+};
 
 console.log("map-style.js fully loaded");
-
