@@ -9,6 +9,31 @@ const MARKERS = {};
 const POPUPS  = {};
 const MINOR_MARKERS = [];
 
+/* ==========================================================================
+   TRAVEL MODE ICONS — Full, restored, and future-proofed
+   ========================================================================== */
+
+const MODE_ICONS = {
+  Plane:      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/plane.svg",
+  Car:        "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/car1.svg",
+  Boat:       "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/boat.svg",
+  Bike:       "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/bike.svg",
+  Transport:  "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/commute.svg",
+  Train:      "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/train.svg",
+  Tram:       "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/tram.svg",
+  Van:        "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/van.svg"
+};
+
+/* Fallback icon (prevents undefined → broken image)
+   Used automatically if a waypoint specifies a future mode not yet added */
+const MODE_ICON_FALLBACK =
+  "https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/waypoint.svg";
+
+/* Helper to safely retrieve a mode icon */
+function getModeIcon(mode) {
+  return MODE_ICONS[mode] || MODE_ICON_FALLBACK;
+}
+
 /* ============================================================
    MARKER CREATION
    ============================================================ */
@@ -133,7 +158,7 @@ function buildPopupHTML(w) {
 
     navHTML += `
       <span class="trip-popup-nav-link" data-dir="next" data-target="${next}">
-        <img src="${MODE_ICONS[mode]}" class="trip-popup-mode-icon">
+        <img src="${getModeIcon(mode)}" class="trip-popup-mode-icon">
         Next Stop${label}
       </span>
     `;
@@ -506,10 +531,10 @@ function updateDetailsHud() {
     } else {
       const wpNext = getWP(next);
       const mode = getLegMode(currentID);
-      const icon = MODE_ICONS[mode];
+      const icon = getModeIcon(mode);
 
       detailsHudLabel.innerHTML =
-        `Next Stop: <img src="${icon}" class="details-sidebar-hud-mode-icon"> ${escapeHTML(wpNext.location)}
+        `Next Stop: <img src="${getModeIcon(mode)}" class="details-sidebar-hud-mode-icon"> ${escapeHTML(wpNext.location)}
          <span class="details-sidebar-hud-flag" style="background-image:url('${wpNext.meta.flag}')"></span>`;
     }
   }
@@ -715,19 +740,22 @@ function updateHUD() {
     hudNext.disabled = true;
   }
 
-  /* HUD label content */
-  if (next) {
-    const mode = getLegMode(currentID);
-    const icon = MODE_ICONS[mode];
-    const wp   = getWP(next);
+/* HUD label content */
+if (next) {
+  const mode = getLegMode(currentID);
+  const icon = getModeIcon(mode);        // Always safe – includes fallback
+  const wp   = getWP(next);
 
-    hudLabel.innerHTML =
-      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(wp.location)} ` +
-      `<span class="hud-flag" style="background-image:url('${wp.meta.flag}')"></span>`;
-  } else {
-    hudLabel.textContent = "";
-  }
+  const flagUrl = wp?.meta?.flag || "";  // Prevents undefined errors
+
+  hudLabel.innerHTML =
+    `Next Stop: <img src="${icon}" class="hud-mode-icon"> ` +
+    `${escapeHTML(wp.location)} ` +
+    `<span class="hud-flag" style="background-image:url('${flagUrl}')"></span>`;
+} else {
+  hudLabel.textContent = "";
 }
+
 
 /* ============================================================
    HUD EVENT LISTENERS
@@ -883,4 +911,5 @@ window.UI = {
 };
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
 
