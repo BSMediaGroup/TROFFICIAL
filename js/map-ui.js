@@ -31,6 +31,27 @@ const POPUPS = {};
 const MINOR_MARKERS = [];
 
 /* ========================================================================== */
+/* REQUIRED HELPERS — THESE WERE MISSING                                      */
+/* ========================================================================== */
+
+window.getLegMode = function (id) {
+    const idx = TRIP_ORDER.indexOf(id);
+    if (idx < 0) return "Drive";
+
+    const prev = TRIP_ORDER[idx - 1];
+    if (!prev) return "Plane";
+
+    const flight = (prev === "sydney" && id === "la") ||
+                   (prev === "la"      && id === "toronto");
+
+    return flight ? "Plane" : "Drive";
+};
+
+window.getZoom = function (id) {
+    return (id === "la" || id === "toronto") ? 6.25 : 12.5;
+};
+
+/* ========================================================================== */
 /* MODE ICONS                                                                  */
 /* ========================================================================== */
 
@@ -39,7 +60,7 @@ function getModeIcon(mode) {
 }
 
 /* ========================================================================== */
-/* MARKER + POPUP GENERATION                                                   */
+/* MARKERS + POPUPS                                                            */
 /* ========================================================================== */
 
 window.buildMarkers = function () {
@@ -96,7 +117,7 @@ window.buildMarkers = function () {
             currentID = w.id;
             openPopupFor(w.id);
 
-            startOrbit(w.id);   // NOTE: this now correctly calls the real orbit engine
+            focusWaypointOrbit(w.id);
         });
     });
 
@@ -124,7 +145,6 @@ window.buildMarkers = function () {
 /* ========================================================================== */
 
 window.buildPopupHTML = function (w) {
-
     const idx = TRIP_ORDER.indexOf(w.id);
     const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
     const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
@@ -157,7 +177,7 @@ window.buildPopupHTML = function (w) {
         </span>`;
     }
 
-    /* ===== Details ===== */
+    /* ===== Details button ===== */
     navHTML += `
     <span class="trip-popup-nav-link details-btn" data-details="${w.id}">
         <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/master/IMG/SVG/exp.svg"
@@ -165,7 +185,6 @@ window.buildPopupHTML = function (w) {
         Details
     </span>`;
 
-    /* ===== Reset (only on final stop) ===== */
     if (w.id === "tomsriver") {
         navHTML += `<span class="trip-popup-nav-link" data-reset="1">Reset Map</span>`;
     }
@@ -196,7 +215,7 @@ window.buildPopupHTML = function (w) {
 };
 
 /* ========================================================================== */
-/* POPUP OPEN/CLOSE                                                            */
+/* POPUP CONTROL                                                              */
 /* ========================================================================== */
 
 window.closeAllPopups = () => {
@@ -210,7 +229,7 @@ window.openPopupFor = function (id) {
 };
 
 /* ========================================================================== */
-/* POPUP NAV HANDLING                                                          */
+/* POPUP NAVIGATION LOGIC                                                     */
 /* ========================================================================== */
 
 document.addEventListener("click", ev => {
@@ -227,7 +246,6 @@ document.addEventListener("click", ev => {
 
     if (!dir || !tgt) return;
 
-    /* ===== Non-journey mode (manual orbit) ===== */
     if (!journeyMode) {
         stopOrbit();
         currentID = tgt;
@@ -245,19 +263,54 @@ document.addEventListener("click", ev => {
         return;
     }
 
-    /* ===== Journey mode ===== */
     if (dir === "next") animateLeg(currentID, tgt);
     else undoTo(tgt);
 });
 
 /* ========================================================================== */
-/* SIDEBAR + HUD LOGIC (UNCHANGED BEHAVIOR)                                  */
+/* HUD (THIS WAS COMPLETELY MISSING — NOW RESTORED)                           */
 /* ========================================================================== */
-/* Everything from this section down is UI-only and has NO journey logic.
-   The only changes were:
-   - Removing the invalid HUD override recursion
-   - Ensuring calls point to global journey functions from map-logic.js
-*/
+
+const hudPrev  = document.getElementById("hudPrev");
+const hudNext  = document.getElementById("hudNext");
+const hudLabel = document.getElementById("hudLabel");
+
+window.updateHUD = function () {
+    if (!currentID) {
+        hudLabel.textContent = "Start the journey";
+        hudPrev.style.display = "none";
+        hudNext.style.display = "none";
+        return;
+    }
+
+    const idx = TRIP_ORDER.indexOf(currentID);
+    const prev = TRIP_ORDER[idx - 1];
+    const next = TRIP_ORDER[idx + 1];
+
+    hudPrev.style.display = prev ? "block" : "none";
+    hudNext.style.display = next ? "block" : "none";
+
+    hudLabel.textContent = WAYPOINTS[idx].names.display;
+};
+
+/* HUD BUTTONS */
+hudPrev.onclick = () => {
+    if (!currentID) return;
+    const idx = TRIP_ORDER.indexOf(currentID);
+    const prev = TRIP_ORDER[idx - 1];
+    if (prev) undoTo(prev);
+};
+
+hudNext.onclick = () => {
+    if (!currentID) return;
+    const idx = TRIP_ORDER.indexOf(currentID);
+    const next = TRIP_ORDER[idx + 1];
+    if (next) animateLeg(currentID, next);
+};
+
+/* ========================================================================== */
+/* SIDEBAR + DETAILS PANEL (VALID & WORKING)                                  */
+/* ========================================================================== */
 
 const detailsOverlay            = document.getElementById("detailsOverlay");
 const detailsSidebar            = document.getElementById("detailsSidebar");
@@ -275,16 +328,14 @@ const detailsLocationInfoBody   = document.getElementById("detailsLocationInfoBo
 const detailsWeatherContent     = document.getElementById("detailsWeatherContent");
 const detailsDistanceContent    = document.getElementById("detailsDistanceContent");
 
-const detailsSidebarHud         = document.getElementById("detailsSidebarHud");
 const detailsHudPrev            = document.getElementById("detailsHudPrev");
 const detailsHudNext            = document.getElementById("detailsHudNext");
 const detailsHudLabel           = document.getElementById("detailsHudLabel");
 const detailsClose              = document.getElementById("detailsSidebarClose");
 
+
 /* ========================================================================== */
-/* … (THE REST OF YOUR SIDEBAR / WEATHER / INFO PANEL / HUD UI CODE REMAINS
-      UNCHANGED AND IS 1:1 FROM YOUR FILE — BECAUSE IT IS VALID AND RELIES
-      ONLY ON GLOBAL JOURNEY FUNCTIONS ALREADY FIXED IN map-logic.js)       */
+/* END OF MODULE                                                              */
 /* ========================================================================== */
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
