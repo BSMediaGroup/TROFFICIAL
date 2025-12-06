@@ -1,4 +1,31 @@
 /* ============================================================
+   SHARED HTML ESCAPE HELPER
+   ============================================================ */
+
+if (typeof window.escapeHTML !== "function") {
+  window.escapeHTML = function escapeHTML(str) {
+    if (str == null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+}
+
+// Local alias so calls to escapeHTML(...) work in this file
+const escapeHTML = window.escapeHTML;
+
+/* ============================================================
+   MAP UI MODULE — v2
+   SECTION 1 — MARKERS & POPUPS
+   ============================================================ */
+
+console.log("map-ui.js loaded");
+
+
+/* ============================================================
    MAP UI MODULE — CLEAN FULL REBUILD (EXPORT STYLE A)
    ============================================================ */
 
@@ -568,3 +595,4 @@ window.closeDetailsSidebar = closeDetailsSidebar;
 window.updateHUD = updateHUD;
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
