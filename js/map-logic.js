@@ -81,6 +81,19 @@ window.computeAllLegDistances = function () {
   });
 };
 
+/* ==========================================================================
+   REQUIRED BY map-core.js — FIXED MISSING FUNCTION
+   ========================================================================== */
+
+window.initDistances = function () {
+  console.log("initDistances(): computing distances…");
+  if (typeof window.computeAllLegDistances === "function") {
+    computeAllLegDistances();
+  } else {
+    console.error("computeAllLegDistances MISSING!");
+  }
+};
+
 /* =======================================================================
    GREAT CIRCLE BUILDER — ZIGZAG FIX (1:1 FROM MONOLITH)
 ======================================================================= */
@@ -232,58 +245,58 @@ function roadLeg(a, b) {
   return geom.slice(s, e + 1);
 }
 
-/* =======================================================================
-   JOURNEY SOURCES (REQUIRED BY CORE)
-======================================================================= */
+/* ==========================================================================
+   REQUIRED BY map-core.js — FIXED MISSING FUNCTION
+   ========================================================================== */
 
 window.addJourneySources = function () {
   const map = MAP();
 
-  const empty = {
-    type: "Feature",
-    geometry: { type: "LineString", coordinates: [] }
-  };
-
-  map.addSource("journey-flight", { type: "geojson", data: empty });
-  map.addSource("journey-drive",  { type: "geojson", data: empty });
-  map.addSource("journey-current",{ type: "geojson", data: empty });
-
-  map.addLayer({
-    id: "journey-flight",
-    type: "line",
-    source: "journey-flight",
-    layout: { visibility: "none" },
-    paint: {
-      "line-color": "#478ED3",
-      "line-width": 3,
-      "line-dasharray": [3, 2],
-      "line-opacity": 0.9
+  function ensureSource(id) {
+    if (!map.getSource(id)) {
+      map.addSource(id, {
+        type: "geojson",
+        data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }}
+      });
     }
+  }
+
+  ensureSource("journey-flight");
+  ensureSource("journey-drive");
+  ensureSource("journey-current");
+
+  function ensureLayer(id, paint) {
+    if (!map.getLayer(id)) {
+      map.addLayer({
+        id,
+        type: "line",
+        source: id,
+        layout: { visibility: "none" },
+        paint
+      });
+    }
+  }
+
+  ensureLayer("journey-flight", {
+    "line-color": "#478ED3",
+    "line-width": 3,
+    "line-dasharray": [3, 2],
+    "line-opacity": 0.9
   });
 
-  map.addLayer({
-    id: "journey-drive",
-    type: "line",
-    source: "journey-drive",
-    layout: { visibility: "none" },
-    paint: {
-      "line-color": "#FF9C57",
-      "line-width": 4,
-      "line-opacity": 0.95
-    }
+  ensureLayer("journey-drive", {
+    "line-color": "#FF9C57",
+    "line-width": 4,
+    "line-opacity": 0.95
   });
 
-  map.addLayer({
-    id: "journey-current",
-    type: "line",
-    source: "journey-current",
-    layout: { visibility: "none" },
-    paint: {
-      "line-color": "#FFFFFF",
-      "line-width": 4,
-      "line-opacity": 1.0
-    }
+  ensureLayer("journey-current", {
+    "line-color": "#FFFFFF",
+    "line-width": 4,
+    "line-opacity": 1
   });
+
+  console.log("✓ addJourneySources(): journey layers ready");
 };
 
 /* =======================================================================
@@ -337,13 +350,9 @@ window.focusWaypointOrbit = function (id) {
     duration: 900
   });
 
-  orbitEnterTimer = setTimeout(() => {
-    orbitEnterTimer = null;
-    startOrbit(id);
-  }, 900);
+  orbitEnterTimer = setTimeout(() => startOrbit(id), 900);
 };
 
-/* Journey orbit (LA/Toronto special case) */
 window.focusJourneyOrbit = function (id) {
   const wp = getWP(id);
   if (!wp) return;
@@ -365,7 +374,7 @@ window.focusJourneyOrbit = function (id) {
 };
 
 /* =======================================================================
-   BUILD COMPLETED ROUTE (flight + road)
+   COMPLETED ROUTE BUILDER
 ======================================================================= */
 
 window.buildCompleteUntil = function (id) {
@@ -393,7 +402,7 @@ window.buildCompleteUntil = function (id) {
 };
 
 /* =======================================================================
-   JOURNEY ANIMATION — CINEMATIC (IDENTICAL BEHAVIOUR)
+   JOURNEY ANIMATION — CINEMATIC
 ======================================================================= */
 
 window.animateLeg = function (a, b) {
@@ -609,10 +618,7 @@ window.startJourney = function () {
 
   ["journey-flight","journey-drive","journey-current"].forEach(id => {
     map.setLayoutProperty(id, "visibility", "visible");
-    map.getSource(id).setData({
-      type:"Feature",
-      geometry:{ type:"LineString", coordinates: [] }
-    });
+    map.getSource(id).setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] } });
   });
 
   openPopupFor(currentID);
@@ -640,9 +646,7 @@ window.startJourney = function () {
     });
   }, START1);
 
-  orbitEnterTimer = setTimeout(() => {
-    startOrbit(currentID);
-  }, START1 + START2);
+  orbitEnterTimer = setTimeout(() => startOrbit(currentID), START1 + START2);
 
   updateHUD();
 };
