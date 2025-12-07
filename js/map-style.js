@@ -1,62 +1,85 @@
 /* ========================================================================== */
-/*                              MAP STYLE MODULE                               */
-/*                     FINAL STABLE VERSION — PATH-A FIXED                     */
+/* MAP-STYLE.JS — HARD-PROTECTED SINGLETON INITIALIZER                        */
 /* ========================================================================== */
+
+if (window.__MAP_STYLE_INITIALIZED) {
+  console.warn("⚠ map-style.js attempted to load twice — BLOCKED");
+  return;
+}
+window.__MAP_STYLE_INITIALIZED = true;
 
 console.log("%cmap-style.js loaded", "color:#00eaff; font-weight:bold;");
 
+/* === DO NOT CHANGE ANYTHING BELOW HERE ================================== */
 
-/* ========================================================================== */
-/* GLOBAL DEFAULT MAP SETTINGS — MUST MATCH YOUR ORIGINAL MONOLITH             */
-/* ========================================================================== */
-
-window.DEFAULT_CENTER = [-95.0, 23.7];   // ⬅ REQUIRED for correct spin axis
+window.DEFAULT_CENTER = [-95, 23.7];
 window.DEFAULT_ZOOM   = 2.45;
 window.ORBIT_ROTATION_SPEED = 0.015;
-
-
-/* ========================================================================== */
-/* TOKEN + BASE STYLE                                                          */
-/* ========================================================================== */
 
 mapboxgl.accessToken =
   "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
 const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
 
+/* === GLOBAL MAP SINGLETON ================================================= */
+
+if (window.__MAP) {
+  console.warn("⚠ Attempted double map creation — BLOCKED");
+} else {
+  window.__MAP = new mapboxgl.Map({
+    container: "map",
+    style: MAP_STYLE_URL,
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    renderWorldCopies: false,
+    projection: "globe"
+  });
+
+  window.__MAP.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
+}
+
+const map = window.__MAP;
 
 /* ========================================================================== */
-/* CREATE MAP INSTANCE                                                         */
+/* STYLE-DATA PERSISTENCE HANDLER                                             */
 /* ========================================================================== */
 
-const map = new mapboxgl.Map({
-  container: "map",
-  style: MAP_STYLE_URL,
-  center: DEFAULT_CENTER,
-  zoom: DEFAULT_ZOOM,
-  pitch: 0,
-  renderWorldCopies: false,
-  projection: "globe"
+map.on("styledata", () => {
+  if (map.__STYLE_LOCK) return;
+  map.__STYLE_LOCK = true;
+
+  console.log("%cmap-style.js: styledata — persistent layer check", "color:#ffaa33");
+
+  try {
+    map.setFog({
+      color: "rgba(5,10,20,0.9)",
+      "high-color": "rgba(60,150,255,0.45)",
+      "horizon-blend": 0.45,
+      "space-color": "#02040A",
+      "star-intensity": 0.65
+    });
+
+    ensureRouteSource("flight-route");
+    ensureRouteSource("drive-route");
+
+    ensureRouteLayer("flight-route", "flight-route", {
+      "line-color": "#478ED3",
+      "line-width": 3,
+      "line-dasharray": [3, 2],
+      "line-opacity": 0.9
+    });
+
+    ensureRouteLayer("drive-route", "drive-route", {
+      "line-color": "#FF9C57",
+      "line-width": 4,
+      "line-opacity": 0.95
+    });
+
+  } finally {
+    map.__STYLE_LOCK = false;
+  }
 });
-
-window.__MAP = map;
-map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
-
-
-/* ========================================================================== */
-/* GLOBE FOG                                                                   */
-/* ========================================================================== */
-
-const FOG_COLOR          = "rgba(5,10,20,0.9)";
-const FOG_HIGH_COLOR     = "rgba(60,150,255,0.45)";
-const FOG_HORIZON_BLEND  = 0.45;
-const FOG_SPACE_COLOR    = "#02040A";
-const FOG_STAR_INTENSITY = 0.65;
-
-
-/* ========================================================================== */
-/* ENSURE ROUTE SOURCES + LAYERS PERSIST THROUGH STYLE RELOADS                */
-/* ========================================================================== */
 
 function ensureRouteSource(id) {
   if (!map.getSource(id)) {
@@ -79,54 +102,16 @@ function ensureRouteLayer(id, src, paint) {
   }
 }
 
-
 /* ========================================================================== */
-/* STYLEDATA — THE **CORRECT** WAY TO GUARANTEE PERSISTENT LAYERS             */
-/* ========================================================================== */
-
-map.on("styledata", () => {
-  console.log("%cmap-style.js: styledata — persistent layer check", "color:#ffaa33");
-
-  /* Fog re-apply (styledata wipes it) */
-  map.setFog({
-    color: FOG_COLOR,
-    "high-color": FOG_HIGH_COLOR,
-    "horizon-blend": FOG_HORIZON_BLEND,
-    "space-color": FOG_SPACE_COLOR,
-    "star-intensity": FOG_STAR_INTENSITY
-  });
-
-  /* PERSISTENT PLACEHOLDER SOURCES */
-  ensureRouteSource("flight-route");
-  ensureRouteSource("drive-route");
-
-  /* PERSISTENT ROUTE LAYERS */
-  ensureRouteLayer("flight-route", "flight-route", {
-    "line-color": "#478ED3",
-    "line-width": 3,
-    "line-dasharray": [3, 2],
-    "line-opacity": 0.9
-  });
-
-  ensureRouteLayer("drive-route", "drive-route", {
-    "line-color": "#FF9C57",
-    "line-width": 4,
-    "line-opacity": 0.95
-  });
-});
-
-
-/* ========================================================================== */
-/* NATION LAYER LOADER                                                         */
+/* NATION LAYERS                                                              */
 /* ========================================================================== */
 
 async function addNation(id, url, color, opacity) {
   if (map.getSource(id)) return;
-
   try {
     const geo = await (await fetch(url)).json();
 
-    map.addSource(id, { type:"geojson", data: geo });
+    map.addSource(id, { type: "geojson", data: geo });
 
     map.addLayer({
       id: id + "-fill",
@@ -147,34 +132,22 @@ async function addNation(id, url, color, opacity) {
   }
 }
 
-
-/* ========================================================================== */
-/* INITIALIZER FOR map-core.js                                                 */
-/* ========================================================================== */
-
 window.initializeStyleLayers = async function () {
   console.log("initializeStyleLayers() running…");
 
-  await addNation(
-    "aus",
+  await addNation("aus",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
-    "#1561CF", 0.12
-  );
+    "#1561CF", 0.12);
 
-  await addNation(
-    "can",
+  await addNation("can",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json",
-    "#CE2424", 0.12
-  );
+    "#CE2424", 0.12);
 
-  await addNation(
-    "usa",
+  await addNation("usa",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json",
-    "#FFFFFF", 0.12
-  );
+    "#FFFFFF", 0.12);
 
   console.log("%cinitializeStyleLayers() complete", "color:#55ff55");
 };
 
-
-console.log("%cmap-style.js fully loaded", "color:#00ffaa; font-weight:bold;");
+console.log("%cmap-style.js fully loaded (singleton active)", "color:#00ffaa; font-weight:bold;");
