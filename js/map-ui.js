@@ -2,14 +2,14 @@
 /* ============================== MAP UI MODULE ============================= */
 /* ========================================================================== */
 
-console.log("map-ui.js loaded");
+console.log("%cmap-ui.js loaded", "color:#00e5ff;font-weight:bold;");
 
 /* ========================================================================== */
-/* SHARED HTML ESCAPE HELPER                                                  */
+/* UTILITIES                                                                   */
 /* ========================================================================== */
 
 if (typeof window.escapeHTML !== "function") {
-  window.escapeHTML = function escapeHTML(str) {
+  window.escapeHTML = function (str) {
     if (str == null) return "";
     return String(str)
       .replace(/&/g, "&amp;")
@@ -23,7 +23,7 @@ if (typeof window.escapeHTML !== "function") {
 const escapeHTML = window.escapeHTML;
 
 /* ========================================================================== */
-/* GLOBAL UI STATE                                                            */
+/* GLOBALS                                                                     */
 /* ========================================================================== */
 
 const MARKERS = {};
@@ -31,154 +31,43 @@ const POPUPS = {};
 const MINOR_MARKERS = [];
 
 /* ========================================================================== */
-/* MODE HELPERS                                                               */
+/* MODE HELPERS                                                                */
 /* ========================================================================== */
 
-/**
- * In case MODE_ICONS is not defined for some reason, we guard.
- */
 function getModeIcon(mode) {
   if (typeof MODE_ICONS === "undefined" || !MODE_ICONS) return "";
   return MODE_ICONS[mode] || MODE_ICONS["Car"] || Object.values(MODE_ICONS)[0];
 }
 
-/**
- * getLegMode / getZoom – if other modules already defined them, don't override.
- * This keeps behavior monolith-accurate but avoids double definitions.
- */
 if (typeof window.getLegMode !== "function") {
   window.getLegMode = function (id) {
-    // Monolith-style logic using next leg + isFlight if available,
-    // otherwise fallback to waypoint.mode
-    if (typeof TRIP_ORDER === "undefined" || !Array.isArray(TRIP_ORDER)) {
-      return "Car";
-    }
-
     const idx = TRIP_ORDER.indexOf(id);
     if (idx < 0) return "Car";
 
     const next = TRIP_ORDER[idx + 1];
 
-    // Prefer global isFlight helper if it exists
     if (typeof window.isFlight === "function" && next) {
       if (isFlight(id, next)) return "Plane";
     } else {
-      // Hard-coded flight segments fallback
-      if ((id === "sydney" && next === "la") || (id === "la" && next === "toronto")) {
+      if ((id === "sydney" && next === "la") ||
+          (id === "la" && next === "toronto"))
         return "Plane";
-      }
     }
 
-    if (typeof window.getWP === "function") {
-      const wp = getWP(id);
-      return (wp && wp.mode) || "Car";
-    }
-
-    return "Car";
+    const wp = getWP(id);
+    return wp?.mode || "Car";
   };
 }
 
 if (typeof window.getZoom !== "function") {
   window.getZoom = function (id) {
-    // Matches monolith behavior
     if (["sydney", "la", "toronto"].includes(id)) return 6.7;
     return 9.4;
   };
 }
 
 /* ========================================================================== */
-/* MARKERS + POPUPS                                                           */
-/* ========================================================================== */
-
-window.buildMarkers = function () {
-  if (!window.__MAP) {
-    console.error("buildMarkers() called before map ready");
-    return;
-  }
-
-  WAYPOINTS.forEach(w => {
-    /* ===== Marker Element ===== */
-    const el = document.createElement("div");
-    el.className = "trip-marker " + w.role;
-    el.innerHTML = `<img src="${w.icon}" class="marker-icon">`;
-
-    // Bounce in
-    setTimeout(() => el.classList.add("bounce"), 80);
-
-    /* ===== Popup ===== */
-    const popup = new mapboxgl.Popup({
-      offset: 26,
-      closeOnClick: true
-    })
-      .setHTML(buildPopupHTML(w))
-      .setLngLat(w.coords);
-
-    POPUPS[w.id] = popup;
-
-    /* ===== Mapbox Marker ===== */
-    const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
-      .setLngLat(w.coords)
-      .addTo(__MAP);
-
-    MARKERS[w.id] = marker;
-
-    if (w.role === "minor") MINOR_MARKERS.push(marker);
-
-    /* ===== Single Click → Focus with top-down tilt ===== */
-    el.addEventListener("click", ev => {
-      ev.stopPropagation();
-
-      if (typeof window.stopOrbit === "function") {
-        stopOrbit();
-      }
-      openPopupFor(w.id);
-      window.currentID = w.id;
-
-      __MAP.easeTo({
-        center: w.coords,
-        zoom: getZoom(w.id) + 1.3,
-        pitch: 0,
-        bearing: 0,
-        duration: 900
-      });
-    });
-
-    /* ===== Double Click → Orbit Mode ===== */
-    el.addEventListener("dblclick", ev => {
-      ev.stopPropagation();
-
-      window.currentID = w.id;
-      openPopupFor(w.id);
-
-      if (typeof window.focusWaypointOrbit === "function") {
-        focusWaypointOrbit(w.id);
-      }
-    });
-  });
-
-  /* ===== Minor-marker visibility vs zoom ===== */
-  function updateMinorMarkers() {
-    const show = __MAP.getZoom() >= 5;
-    MINOR_MARKERS.forEach(m => {
-      const el = m.getElement();
-      if (el) el.style.display = show ? "block" : "none";
-    });
-  }
-
-  updateMinorMarkers();
-  __MAP.on("zoom", updateMinorMarkers);
-
-  /* ===== Map background click closes popups + orbit ===== */
-  __MAP.on("click", () => {
-    closeAllPopups();
-    if (typeof window.stopOrbit === "function") {
-      stopOrbit();
-    }
-  });
-};
-
-/* ========================================================================== */
-/* POPUP HTML BUILDER                                                         */
+/* POPUP HTML BUILDER                                                          */
 /* ========================================================================== */
 
 window.buildPopupHTML = function (w) {
@@ -191,38 +80,28 @@ window.buildPopupHTML = function (w) {
   const totalMi = TRAVELLED_MI[TRIP_ORDER.at(-1)];
   const totalKm = TRAVELLED_KM[TRIP_ORDER.at(-1)];
 
-  const mode = getLegMode(w.id);
-  const locLabel = w.location || "";
-  const flagUrl = w.meta?.flag || "";
+  const distLabel = LEG_DIST[w.id]
+    ? ` – ${LEG_DIST[w.id].mi}mi <span style="color:#A3A3A3">(${LEG_DIST[w.id].km}km)</span>`
+    : "";
 
   let navHTML = "";
 
-  /* ===== Previous ===== */
   if (prev) {
     navHTML += `
       <span class="trip-popup-nav-link" data-dir="prev" data-target="${prev}">
         Go Back
-      </span>
-    `;
+      </span>`;
   }
 
-  /* ===== Next ===== */
   if (next) {
-    const dist = LEG_DIST[w.id];
-    let label = "";
-    if (dist) {
-      label = ` – ${dist.mi}mi <span style="color:#A3A3A3">(${dist.km}km)</span>`;
-    }
-
+    const mode = getLegMode(w.id);
     navHTML += `
       <span class="trip-popup-nav-link" data-dir="next" data-target="${next}">
         <img src="${getModeIcon(mode)}" class="trip-popup-mode-icon">
-        Next Stop${label}
-      </span>
-    `;
+        Next Stop${distLabel}
+      </span>`;
   }
 
-  /* ===== Details button (with expand icon prefix) ===== */
   navHTML += `
     <span class="trip-popup-nav-link details-btn" data-details="${w.id}">
       <img src="https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/exp.svg"
@@ -232,9 +111,7 @@ window.buildPopupHTML = function (w) {
   `;
 
   if (w.id === "tomsriver") {
-    navHTML += `
-      <span class="trip-popup-nav-link" data-reset="1">Reset Map</span>
-    `;
+    navHTML += `<span class="trip-popup-nav-link" data-reset="1">Reset Map</span>`;
   }
 
   return `
@@ -245,13 +122,11 @@ window.buildPopupHTML = function (w) {
       </div>
 
       <div class="trip-popup-location">
-        <span>${escapeHTML(locLabel)}</span>
-        <span class="trip-popup-flag" style="background-image:url('${flagUrl}')"></span>
+        <span>${escapeHTML(w.location || "")}</span>
+        <span class="trip-popup-flag" style="background-image:url('${w.meta?.flag || ""}')"></span>
       </div>
 
-      <div class="trip-popup-body">
-        ${escapeHTML(w.description || "")}
-      </div>
+      <div class="trip-popup-body">${escapeHTML(w.description || "")}</div>
 
       <div class="trip-popup-travelled">
         Travelled: ${tMi} / ${totalMi}mi
@@ -260,15 +135,13 @@ window.buildPopupHTML = function (w) {
 
       <div class="trip-popup-divider"></div>
 
-      <div class="trip-popup-nav">
-        ${navHTML}
-      </div>
+      <div class="trip-popup-nav">${navHTML}</div>
     </div>
   `;
 };
 
 /* ========================================================================== */
-/* POPUP CONTROL                                                              */
+/* POPUP CONTROL                                                               */
 /* ========================================================================== */
 
 window.closeAllPopups = () => {
@@ -282,7 +155,75 @@ window.openPopupFor = function (id) {
 };
 
 /* ========================================================================== */
-/* POPUP NAVIGATION LOGIC                                                     */
+/* MARKERS                                                                     */
+/* ========================================================================== */
+
+window.buildMarkers = function () {
+  if (!window.__MAP) return console.error("buildMarkers(): map missing");
+
+  WAYPOINTS.forEach(w => {
+    const el = document.createElement("div");
+    el.className = "trip-marker " + w.role;
+    el.innerHTML = `<img src="${w.icon}" class="marker-icon">`;
+
+    setTimeout(() => el.classList.add("bounce"), 80);
+
+    const popup = new mapboxgl.Popup({ offset: 26, closeOnClick: true })
+      .setHTML(buildPopupHTML(w))
+      .setLngLat(w.coords);
+
+    POPUPS[w.id] = popup;
+
+    const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+      .setLngLat(w.coords)
+      .addTo(__MAP);
+
+    MARKERS[w.id] = marker;
+    if (w.role === "minor") MINOR_MARKERS.push(marker);
+
+    el.addEventListener("click", ev => {
+      ev.stopPropagation();
+      stopOrbit();
+      window.currentID = w.id;
+
+      openPopupFor(w.id);
+
+      __MAP.easeTo({
+        center: w.coords,
+        zoom: getZoom(w.id) + 1.3,
+        pitch: 0,
+        bearing: 0,
+        duration: 900
+      });
+    });
+
+    el.addEventListener("dblclick", ev => {
+      ev.stopPropagation();
+      window.currentID = w.id;
+      openPopupFor(w.id);
+      focusWaypointOrbit(w.id);
+    });
+  });
+
+  function updateMinorMarkers() {
+    const show = __MAP.getZoom() >= 5;
+    MINOR_MARKERS.forEach(m => {
+      const el = m.getElement();
+      if (el) el.style.display = show ? "block" : "none";
+    });
+  }
+
+  updateMinorMarkers();
+  __MAP.on("zoom", updateMinorMarkers);
+
+  __MAP.on("click", () => {
+    closeAllPopups();
+    stopOrbit();
+  });
+};
+
+/* ========================================================================== */
+/* POPUP NAVIGATION                                                            */
 /* ========================================================================== */
 
 document.addEventListener("click", ev => {
@@ -291,28 +232,22 @@ document.addEventListener("click", ev => {
 
   ev.stopPropagation();
 
-  const reset = link.dataset.reset;
-  const dir = link.dataset.dir;
-  const tgt = link.dataset.target;
-
-  if (reset) {
-    if (typeof window.resetJourney === "function") {
-      resetJourney();
-    }
+  if (link.dataset.reset) {
+    resetJourney();
     return;
   }
 
+  const dir = link.dataset.dir;
+  const tgt = link.dataset.target;
+
   if (!dir || !tgt) return;
 
-  // Non-journey mode: simple focus + orbit
   if (!window.journeyMode) {
-    if (typeof window.stopOrbit === "function") {
-      stopOrbit();
-    }
+    stopOrbit();
     window.currentID = tgt;
-    openPopupFor(tgt);
 
-    const wp = typeof window.getWP === "function" ? getWP(tgt) : WAYPOINTS.find(w => w.id === tgt);
+    const wp = getWP(tgt);
+    openPopupFor(tgt);
 
     if (wp) {
       __MAP.easeTo({
@@ -324,80 +259,58 @@ document.addEventListener("click", ev => {
       });
     }
 
-    if (typeof window.startOrbit === "function") {
-      startOrbit(tgt);
-    }
+    startOrbit(tgt);
     return;
   }
 
-  // Journey mode: drive the animation
-  if (dir === "next") {
-    if (typeof window.animateLeg === "function") {
-      animateLeg(window.currentID, tgt);
-    }
-  } else if (dir === "prev") {
-    if (typeof window.undoTo === "function") {
-      undoTo(tgt);
-    }
-  }
+  if (dir === "next") animateLeg(window.currentID, tgt);
+  else if (dir === "prev") undoTo(tgt);
 });
 
 /* ========================================================================== */
-/* POPUP CLOSE BUTTON ARIA FIX                                                */
+/* LEGEND                                                                     */
 /* ========================================================================== */
 
-document.addEventListener("DOMNodeInserted", e => {
-  if (e.target.classList?.contains("mapboxgl-popup-close-button")) {
-    e.target.removeAttribute("aria-hidden");
-  }
-});
-
-/* ========================================================================== */
-/* LEGEND COLLAPSE LOGIC (guarded, monolith-accurate)                         */
-/* ========================================================================== */
-
-(function initLegendUI() {
+(function () {
   if (window.__LEGEND_UI_INITIALIZED) return;
 
-  const legendToggle = document.getElementById("legendToggle");
-  const legendToggleIcon = document.getElementById("legendToggleIcon");
-  const legendToggleLabel = document.getElementById("legendToggleLabel");
-  const legendContainer = document.getElementById("legendContainer");
+  const toggle = document.getElementById("legendToggle");
+  const icon = document.getElementById("legendToggleIcon");
+  const label = document.getElementById("legendToggleLabel");
+  const container = document.getElementById("legendContainer");
 
-  if (!legendToggle || !legendToggleIcon || !legendToggleLabel || !legendContainer) {
-    return;
-  }
+  if (!toggle || !icon || !label || !container) return;
 
-  const LEGEND_EXPAND_ICON =
+  const EXPAND =
     "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/expand.svg";
-  const LEGEND_COLLAPSE_ICON =
+  const COLLAPSE =
     "https://raw.githubusercontent.com/BSMediaGroup/Resources/refs/heads/master/IMG/SVG/collapse.svg";
 
-  let legendCollapsed = false;
+  let collapsed = false;
 
-  function updateLegendUI() {
-    if (legendCollapsed) {
-      legendContainer.classList.add("legend-collapsed");
-      legendToggleIcon.src = LEGEND_EXPAND_ICON;
-      legendToggleLabel.textContent = "EXPAND";
+  function update() {
+    if (collapsed) {
+      container.classList.add("legend-collapsed");
+      icon.src = EXPAND;
+      label.textContent = "EXPAND";
     } else {
-      legendContainer.classList.remove("legend-collapsed");
-      legendToggleIcon.src = LEGEND_COLLAPSE_ICON;
-      legendToggleLabel.textContent = "COLLAPSE";
+      container.classList.remove("legend-collapsed");
+      icon.src = COLLAPSE;
+      label.textContent = "COLLAPSE";
     }
   }
 
-  legendToggle.addEventListener("click", () => {
-    legendCollapsed = !legendCollapsed;
-    updateLegendUI();
+  toggle.addEventListener("click", () => {
+    collapsed = !collapsed;
+    update();
   });
 
-  updateLegendUI();
+  update();
   window.__LEGEND_UI_INITIALIZED = true;
 })();
 
 /* ========================================================================== */
-/* HUD (BOTTOM JOURNEY CONTROLS)                                              */
+/* HUD                                                                        */
 /* ========================================================================== */
 
 const hud = document.getElementById("journeyHud");
@@ -405,25 +318,8 @@ const hudPrev = document.getElementById("hudPrev");
 const hudNext = document.getElementById("hudNext");
 const hudLabel = document.getElementById("hudLabel");
 
-/**
- * Safe wrappers in case higher-level helpers exist.
- */
-function getHudLocationLabel(wp) {
-  if (typeof window.getLocationLabel === "function") {
-    return getLocationLabel(wp);
-  }
-  return wp?.location || "";
-}
-
-function getHudCountryCode(wp) {
-  if (typeof window.getCountryCode === "function") {
-    return getCountryCode(wp);
-  }
-  return wp?.meta?.countryCode || "";
-}
-
 window.updateHUD = function () {
-  if (!hud || !hudPrev || !hudNext || !hudLabel) return;
+  if (!hud) return;
 
   if (!window.journeyMode) {
     hud.style.display = "none";
@@ -440,10 +336,8 @@ window.updateHUD = function () {
 
   if (next) {
     const d = LEG_DIST[window.currentID];
-    let distLabel = "";
-    if (d) distLabel = ` – ${d.mi}mi (${d.km}km)`;
-
-    hudNext.textContent = "Next Stop" + distLabel;
+    const lbl = d ? ` – ${d.mi}mi (${d.km}km)` : "";
+    hudNext.textContent = "Next Stop" + lbl;
     hudNext.disabled = false;
   } else {
     hudNext.textContent = "Next Stop";
@@ -453,42 +347,30 @@ window.updateHUD = function () {
   if (next) {
     const mode = getLegMode(window.currentID);
     const icon = getModeIcon(mode);
-    const wp = typeof window.getWP === "function" ? getWP(next) : WAYPOINTS.find(w => w.id === next);
+    const wp = getWP(next);
 
-    if (wp) {
-      hudLabel.innerHTML =
-        `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(getHudLocationLabel(wp))} ` +
-        `<span class="hud-flag" style="background-image:url('${wp.meta.flag}')"></span>`;
-    } else {
-      hudLabel.textContent = "";
-    }
+    hudLabel.innerHTML =
+      `Next Stop: <img src="${icon}" class="hud-mode-icon"> ${escapeHTML(wp.location)}
+       <span class="hud-flag" style="background-image:url('${wp.meta.flag}')"></span>`;
   } else {
     hudLabel.textContent = "";
   }
 };
 
-if (hudPrev) {
-  hudPrev.addEventListener("click", () => {
-    if (!window.journeyMode) return;
-    const idx = TRIP_ORDER.indexOf(window.currentID);
-    if (idx > 0 && typeof window.undoTo === "function") {
-      undoTo(TRIP_ORDER[idx - 1]);
-    }
-  });
-}
+hudPrev?.addEventListener("click", () => {
+  if (!window.journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(window.currentID);
+  if (idx > 0) undoTo(TRIP_ORDER[idx - 1]);
+});
 
-if (hudNext) {
-  hudNext.addEventListener("click", () => {
-    if (!window.journeyMode) return;
-    const idx = TRIP_ORDER.indexOf(window.currentID);
-    if (idx < TRIP_ORDER.length - 1 && typeof window.animateLeg === "function") {
-      animateLeg(window.currentID, TRIP_ORDER[idx + 1]);
-    }
-  });
-}
+hudNext?.addEventListener("click", () => {
+  if (!window.journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(window.currentID);
+  if (idx < TRIP_ORDER.length - 1) animateLeg(window.currentID, TRIP_ORDER[idx + 1]);
+});
 
 /* ========================================================================== */
-/* SIDEBAR + DETAILS PANEL                                                    */
+/* SIDEBAR                                                                    */
 /* ========================================================================== */
 
 const detailsOverlay = document.getElementById("detailsOverlay");
@@ -498,12 +380,10 @@ const detailsTitle = document.getElementById("detailsSidebarTitle");
 const detailsIcon = document.getElementById("detailsSidebarIcon");
 const detailsLocation = document.getElementById("detailsSidebarLocation");
 const detailsDescription = document.getElementById("detailsSidebarDescription");
-
 const detailsTourist = document.getElementById("detailsSidebarTourist");
 const detailsToilets = document.getElementById("detailsSidebarToilets");
 const detailsHotels = document.getElementById("detailsSidebarHotels");
 const detailsClose = document.getElementById("detailsSidebarClose");
-
 const detailsLocationInfoBody = document.getElementById("detailsLocationInfoBody");
 const detailsWeatherContent = document.getElementById("detailsWeatherContent");
 const detailsDistanceContent = document.getElementById("detailsDistanceContent");
@@ -512,419 +392,234 @@ const detailsSidebarHud = document.getElementById("detailsSidebarHud");
 const detailsHudPrev = document.getElementById("detailsHudPrev");
 const detailsHudNext = document.getElementById("detailsHudNext");
 const detailsHudLabel = document.getElementById("detailsHudLabel");
+const detailsStart = document.getElementById("detailsSidebarStartJourney");
 
-/* Start-journey button inside sidebar */
-const detailsSidebarStartJourney = document.getElementById("detailsSidebarStartJourney");
-
-/* ========================================================================== */
-/* CURRENCY / TIME / WEATHER HELPERS                                          */
-/* ========================================================================== */
-
-function getCurrencyInfo(countryCode) {
-  const map = {
-    AU: { code: "AUD", name: "Australian Dollar", symbol: "A$" },
-    US: { code: "USD", name: "United States Dollar", symbol: "US$" },
-    CA: { code: "CAD", name: "Canadian Dollar", symbol: "CA$" }
-  };
-  return map[countryCode] || { code: "—", name: "Unknown currency", symbol: "?" };
-}
-
-function formatLocalTime(wp) {
-  const tz = wp.meta?.timezone;
-  const locale = wp.meta?.locale || "en-US";
-
-  if (!tz) return "Time unavailable";
-
-  try {
-    const now = new Date();
-
-    const weekday = new Intl.DateTimeFormat(locale, {
-      timeZone: tz,
-      weekday: "long"
-    }).format(now);
-
-    const time12h = new Intl.DateTimeFormat(locale, {
-      timeZone: tz,
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    }).format(now);
-
-    return `${weekday}, ${time12h}`;
-  } catch {
-    return "Time unavailable";
-  }
-}
-
-function formatTimeZoneWithOffset(wp) {
-  const tz = wp.meta?.timezone;
-  const locale = wp.meta?.locale || "en-US";
-
-  if (!tz) return "N/A";
-
-  try {
-    const now = new Date();
-    const fmt = new Intl.DateTimeFormat(locale, {
-      timeZone: tz,
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZoneName: "shortOffset"
-    });
-
-    const parts = fmt.formatToParts(now);
-    let offset = parts.find(p => p.type === "timeZoneName")?.value || "";
-
-    if (offset.startsWith("GMT")) offset = "UTC" + offset.slice(3);
-
-    return `${tz} (${offset})`;
-  } catch {
-    return tz;
-  }
-}
-
-function mapWeatherCodeToInfo(code) {
-  const c = Number(code);
-  if (isNaN(c)) return { label: "Unknown conditions", icon: "?" };
-
-  if (c === 0) return { label: "Clear sky", icon: "☀️" };
-  if (c === 1 || c === 2) return { label: "Mostly clear", icon: "🌤️" };
-  if (c === 3) return { label: "Overcast", icon: "☁️" };
-  if (c === 45 || c === 48) return { label: "Fog / low clouds", icon: "🌫️" };
-  if (c >= 51 && c <= 55) return { label: "Drizzle", icon: "🌦️" };
-  if (c >= 61 && c <= 65) return { label: "Rain", icon: "🌧️" };
-  if (c === 66 || c === 67) return { label: "Freezing rain", icon: "🌧️" };
-  if (c >= 71 && c <= 75) return { label: "Snow", icon: "🌨️" };
-  if (c === 77) return { label: "Snow grains", icon: "❄️" };
-  if (c >= 80 && c <= 82) return { label: "Rain showers", icon: "🌦️" };
-  if (c === 85 || c === 86) return { label: "Snow showers", icon: "🌨️" };
-  if (c === 95) return { label: "Thunderstorm", icon: "⛈️" };
-  if (c === 96 || c === 99) return { label: "Thunderstorm with hail", icon: "⛈️" };
-
-  return { label: "Conditions unknown", icon: "?" };
-}
-
-/* ========================================================================== */
-/* LOCATION INFO RENDER                                                       */
-/* ========================================================================== */
-
-function renderLocationInfo(wp) {
-  if (!detailsLocationInfoBody || !wp) return;
-
-  const city = wp.names?.city || "";
-  const state = wp.names?.state || "";
-  const country = wp.names?.country || "";
-  const flagUrl = wp.meta?.flag || "";
-  const currency = getCurrencyInfo(wp.meta?.countryCode);
-  const localTime = formatLocalTime(wp);
-  const tzDisplay = formatTimeZoneWithOffset(wp);
-
-  const countryFlag = flagUrl
-    ? `<img src="${flagUrl}" style="width:20px;height:14px;border-radius:2px;border:1px solid #fff;">`
-    : "";
-
-  detailsLocationInfoBody.innerHTML = `
-    <div class="details-location-row">
-      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">City</div>
-      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">${escapeHTML(city)}</div>
-    </div>
-
-    <div class="details-location-row">
-      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">State / Province</div>
-      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">${escapeHTML(state)}</div>
-    </div>
-
-    <div class="details-location-row">
-      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Country</div>
-      <div class="details-kv-value" style="font-family:'SuiGenerisRg'; display:flex; justify-content:flex-end; align-items:center; gap:6px;">
-        ${countryFlag}
-        ${escapeHTML(country)}
-      </div>
-    </div>
-
-    <div class="details-location-row">
-      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Timezone</div>
-      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">
-        <span class="details-pill">${escapeHTML(tzDisplay)}</span>
-      </div>
-    </div>
-
-    <div class="details-location-row">
-      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Local Time</div>
-      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">${escapeHTML(localTime)}</div>
-    </div>
-
-    <div class="details-location-row">
-      <div class="details-kv-label" style="font-family:'SuiGenerisRg'">Currency</div>
-      <div class="details-kv-value" style="font-family:'SuiGenerisRg'">
-        ${currency.code} – ${currency.name}
-        <span class="details-pill">${currency.symbol}</span>
-      </div>
-    </div>
-  `;
-}
-
-/* ========================================================================== */
-/* DISTANCE RENDER                                                            */
-/* ========================================================================== */
-
-function renderDistance(wp) {
-  if (!detailsDistanceContent || !wp) return;
-
-  const idx = TRIP_ORDER.indexOf(wp.id);
-  const lastIdx = TRIP_ORDER.length - 1;
-  let html = "";
-
-  if (idx === 0) {
-    html += `<div style="font-family:'SuiGenerisRg'">Starting point of the journey.</div>`;
-  } else {
-    const prevId = TRIP_ORDER[idx - 1];
-    const legPrev = LEG_DIST[prevId];
-
-    if (legPrev) {
-      html += `
-        <div style="font-family:'SuiGenerisRg'">
-          Distance from previous stop:<br>
-          <strong style="color:#FFA50D">${legPrev.mi} mi</strong>
-          <span style="color:#A3A3A3">(${legPrev.km} km)</span>
-        </div>
-      `;
-    }
-  }
-
-  html += `<br><strong>Distance to Next</strong><br>`;
-
-  if (idx === lastIdx) {
-    html += `<div style="font-family:'SuiGenerisRg'">End of route.</div>`;
-  } else {
-    const legNext = LEG_DIST[wp.id];
-
-    if (legNext) {
-      html += `
-        <div style="font-family:'SuiGenerisRg'">
-          <strong style="color:#FFA50D">${legNext.mi} mi</strong>
-          <span style="color:#A3A3A3">(${legNext.km} km)</span>
-        </div>
-      `;
-    }
-  }
-
-  detailsDistanceContent.innerHTML = html;
-}
-
-/* ========================================================================== */
-/* WEATHER RENDER                                                             */
-/* ========================================================================== */
-
-function renderWeather(wp) {
-  if (!detailsWeatherContent || !wp) return;
-
-  detailsWeatherContent.innerHTML =
-    `<div class="details-weather-status">Loading current weather…</div>`;
-
-  const [lon, lat] = wp.coords || [];
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    detailsWeatherContent.innerHTML =
-      `<div class="details-weather-error">Weather unavailable.</div>`;
-    return;
-  }
-
-  const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
-  const requestId = wp.id;
-
-  fetch(url)
-    .then(r => r.json())
-    .then(data => {
-      if (!detailsSidebar || detailsSidebar.dataset.currentId !== requestId) return;
-
-      const cw = data?.current_weather;
-      if (!cw) throw new Error("Missing weather data");
-
-      const info = mapWeatherCodeToInfo(cw.weathercode);
-
-      const tempC = cw.temperature;
-      const tempF = +(tempC * 9 / 5 + 32).toFixed(1);
-
-      const windK = cw.windspeed;
-      const windM = +(windK * 0.621371).toFixed(1);
-
-      detailsWeatherContent.innerHTML = `
-        <div class="details-weather-main">
-          <div class="details-weather-icon">${info.icon}</div>
-
-          <div class="details-weather-temp" style="font-family:'SuiGenerisRg'; color:#FFA50D;">
-            ${tempF}°F 
-            <span style="color:#A3A3A3">(${tempC.toFixed(1)}°C)</span>
-          </div>
-        </div>
-
-        <div class="details-weather-meta">
-          <div class="details-weather-label">${info.label}</div>
-
-          <div class="details-weather-wind" style="font-family:'SuiGenerisRg'">
-            Wind: ${windM} mi/h 
-            <span style="color:#A3A3A3">(${windK} km/h)</span>
-          </div>
-        </div>
-      `;
-    })
-    .catch(() => {
-      if (!detailsSidebar || detailsSidebar.dataset.currentId !== requestId) return;
-      detailsWeatherContent.innerHTML =
-        `<div class="details-weather-error">Weather unavailable.</div>`;
-    });
-}
-
-/* ========================================================================== */
-/* SIDEBAR HUD SYNC                                                           */
-/* ========================================================================== */
+/* ----- SIDEBAR STATE ----- */
 
 function updateDetailsHud() {
-  if (!detailsSidebarHud || !detailsSidebarStartJourney) return;
+  if (!detailsSidebarHud || !detailsStart) return;
 
   if (!window.journeyMode || !window.currentID) {
-    // show start-journey button, hide HUD
     detailsSidebarHud.style.display = "none";
-    detailsSidebarStartJourney.style.display = "block";
+    detailsStart.style.display = "block";
 
-    detailsSidebarStartJourney.onclick = () => {
-      if (typeof window.startJourney === "function") {
-        startJourney();
-      }
-      if (typeof window.updateHUD === "function") updateHUD();
-      if (detailsSidebar.dataset.currentId) {
+    detailsStart.onclick = () => {
+      startJourney();
+      updateHUD();
+      if (detailsSidebar.dataset.currentId)
         openDetailsSidebar(detailsSidebar.dataset.currentId);
-      }
     };
-
     return;
   }
 
-  // In journey mode – show sidebar HUD, hide start button
-  detailsSidebarStartJourney.style.display = "none";
+  detailsStart.style.display = "none";
   detailsSidebarHud.style.display = "block";
 
   const idx = TRIP_ORDER.indexOf(window.currentID);
   const prev = idx > 0 ? TRIP_ORDER[idx - 1] : null;
   const next = idx < TRIP_ORDER.length - 1 ? TRIP_ORDER[idx + 1] : null;
 
-  if (detailsHudPrev) {
-    detailsHudPrev.disabled = !prev;
-  }
+  detailsHudPrev.disabled = !prev;
+  detailsHudNext.disabled = !next;
 
-  if (detailsHudNext) {
-    detailsHudNext.textContent = "Next Stop";
-    detailsHudNext.disabled = !next;
-  }
-
-  if (detailsHudLabel) {
-    if (!next) {
-      detailsHudLabel.textContent = "";
-    } else {
-      const wpNext = typeof window.getWP === "function" ? getWP(next) : WAYPOINTS.find(w => w.id === next);
-      const mode = getLegMode(window.currentID);
-      const icon = getModeIcon(mode);
-
-      if (wpNext) {
-        detailsHudLabel.innerHTML =
-          `Next Stop: <img src="${icon}" class="details-sidebar-hud-mode-icon"> ${escapeHTML(wpNext.location)}
-           <span class="details-sidebar-hud-flag" style="background-image:url('${wpNext.meta.flag}')"></span>`;
-      } else {
-        detailsHudLabel.textContent = "";
-      }
-    }
+  if (next) {
+    const wpNext = getWP(next);
+    const icon = getModeIcon(getLegMode(window.currentID));
+    detailsHudLabel.innerHTML =
+      `Next Stop: <img src="${icon}" class="details-sidebar-hud-mode-icon"> ${escapeHTML(wpNext.location)}
+       <span class="details-sidebar-hud-flag" style="background-image:url('${wpNext.meta.flag}')"></span>`;
+  } else {
+    detailsHudLabel.textContent = "";
   }
 }
 
-/* ========================================================================== */
-/* OPEN / CLOSE SIDEBAR                                                       */
-/* ========================================================================== */
+/* ----- RENDERERS ----- */
+
+function renderLocationInfo(wp) {
+  if (!detailsLocationInfoBody || !wp) return;
+
+  const city = escapeHTML(wp.names.city);
+  const state = escapeHTML(wp.names.state);
+  const country = escapeHTML(wp.names.country);
+  const flagUrl = wp.meta.flag;
+
+  const currency = getCurrencyInfo(wp.meta.countryCode);
+  const localTime = escapeHTML(formatLocalTime(wp));
+  const tzDisplay = escapeHTML(formatTimeZoneWithOffset(wp));
+
+  detailsLocationInfoBody.innerHTML = `
+    <div class="details-location-row">
+      <div class="details-kv-label">City</div>
+      <div class="details-kv-value">${city}</div>
+    </div>
+    <div class="details-location-row">
+      <div class="details-kv-label">State / Province</div>
+      <div class="details-kv-value">${state}</div>
+    </div>
+    <div class="details-location-row">
+      <div class="details-kv-label">Country</div>
+      <div class="details-kv-value" style="display:flex; justify-content:flex-end; gap:6px;">
+        <img src="${flagUrl}" class="country-flag"> ${country}
+      </div>
+    </div>
+    <div class="details-location-row">
+      <div class="details-kv-label">Timezone</div>
+      <div class="details-kv-value">
+        <span class="details-pill">${tzDisplay}</span>
+      </div>
+    </div>
+    <div class="details-location-row">
+      <div class="details-kv-label">Local Time</div>
+      <div class="details-kv-value">${localTime}</div>
+    </div>
+    <div class="details-location-row">
+      <div class="details-kv-label">Currency</div>
+      <div class="details-kv-value">
+        ${currency.code} – ${currency.name}
+        <span class="details-pill">${currency.symbol}</span>
+      </div>
+    </div>`;
+}
+
+function renderDistance(wp) {
+  if (!detailsDistanceContent) return;
+
+  const idx = TRIP_ORDER.indexOf(wp.id);
+  const lastIdx = TRIP_ORDER.length - 1;
+
+  let html = "";
+
+  if (idx === 0) {
+    html += `<div>Starting point of the journey.</div>`;
+  } else {
+    const legPrev = LEG_DIST[TRIP_ORDER[idx - 1]];
+    if (legPrev) {
+      html += `<div>Distance from previous stop:<br>
+                <strong style="color:#FFA50D">${legPrev.mi} mi</strong>
+                <span style="color:#A3A3A3">(${legPrev.km} km)</span>
+               </div>`;
+    }
+  }
+
+  html += `<br><strong>Distance to Next</strong><br>`;
+
+  if (idx === lastIdx) {
+    html += `<div>End of route.</div>`;
+  } else {
+    const legNext = LEG_DIST[wp.id];
+    if (legNext) {
+      html += `<div><strong style="color:#FFA50D">${legNext.mi} mi</strong>
+               <span style="color:#A3A3A3">(${legNext.km} km)</span></div>`;
+    }
+  }
+
+  detailsDistanceContent.innerHTML = html;
+}
+
+function renderWeather(wp) {
+  if (!detailsWeatherContent) return;
+
+  detailsWeatherContent.innerHTML = `<div>Loading current weather…</div>`;
+
+  const [lon, lat] = wp.coords;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    detailsWeatherContent.innerHTML = `<div>Weather unavailable.</div>`;
+    return;
+  }
+
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+
+  const requestId = wp.id;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      if (detailsSidebar.dataset.currentId !== requestId) return;
+
+      const cw = data?.current_weather;
+      if (!cw) throw Error();
+
+      const info = mapWeatherCodeToInfo(cw.weathercode);
+
+      const tempC = cw.temperature;
+      const tempF = (tempC * 9) / 5 + 32;
+      const windM = cw.windspeed * 0.621371;
+
+      detailsWeatherContent.innerHTML = `
+        <div class="details-weather-main">
+          <div class="details-weather-icon">${info.icon}</div>
+          <div class="details-weather-temp" style="color:#FFA50D;">
+            ${tempF.toFixed(1)}°F 
+            <span style="color:#A3A3A3">(${tempC.toFixed(1)}°C)</span>
+          </div>
+        </div>
+        <div class="details-weather-meta">
+          <div>${info.label}</div>
+          <div>Wind: ${windM.toFixed(1)} mi/h 
+            <span style="color:#A3A3A3">(${cw.windspeed} km/h)</span>
+          </div>
+        </div>`;
+    })
+    .catch(() => {
+      if (detailsSidebar.dataset.currentId === requestId)
+        detailsWeatherContent.innerHTML = `<div>Weather unavailable.</div>`;
+    });
+}
+
+/* ----- SIDEBAR OPEN/CLOSE ----- */
 
 window.openDetailsSidebar = function (id) {
   if (!detailsSidebar) return;
 
-  const w =
-    (typeof window.getWP === "function" ? getWP(id) : null) ||
-    WAYPOINTS.find(x => x.id === id);
+  const w = getWP(id);
   if (!w) return;
 
-  // track which waypoint is active for async weather
   detailsSidebar.dataset.currentId = w.id;
 
-  // Title + icon
-  if (detailsTitle) {
-    detailsTitle.textContent = w.names?.display || "Unknown Location";
-  }
-  if (detailsIcon) {
-    detailsIcon.src = w.icon || "";
-    detailsIcon.alt = w.names?.display || "Waypoint icon";
-  }
+  detailsTitle.textContent = w.names.display;
+  detailsIcon.src = w.icon;
+  detailsIcon.alt = w.names.display;
 
-  // Location line with flag suffix
-  if (detailsLocation) {
-    const locLabel = w.location || "";
-    const flagUrl = w.meta?.flag || "";
-    const flagSpan = flagUrl
-      ? `<span class="details-location-flag-inline" style="background-image:url('${flagUrl}')"></span>`
-      : "";
-    detailsLocation.innerHTML =
-      `<span class="details-location-header-line">${escapeHTML(locLabel)} ${flagSpan}</span>`;
-  }
+  const flag = w.meta.flag
+    ? `<span class="details-location-flag-inline" style="background-image:url('${w.meta.flag}')"></span>`
+    : "";
 
-  // Description
-  if (detailsDescription) {
-    detailsDescription.textContent = w.description || "";
-  }
+  detailsLocation.innerHTML =
+    `<span class="details-location-header-line">${escapeHTML(w.location)} ${flag}</span>`;
 
-  // Image
-  if (detailsImage) {
-    detailsImage.src = w.image || "";
-    detailsImage.alt = w.names?.display || "Waypoint image";
-  }
+  detailsDescription.textContent = w.description;
+  detailsImage.src = w.image;
 
-  // Explore links
-  if (detailsTourist) detailsTourist.href = w.links?.search || "#";
-  if (detailsToilets) detailsToilets.href = w.links?.toilets || "#";
-  if (detailsHotels) detailsHotels.href = w.links?.hotels || "#";
+  detailsTourist.href = w.links?.search || "#";
+  detailsToilets.href = w.links?.toilets || "#";
+  detailsHotels.href = w.links?.hotels || "#";
 
-  // Populate sections
   renderLocationInfo(w);
   renderWeather(w);
   renderDistance(w);
 
-  // Sync HUD state
   updateDetailsHud();
 
-  // Show UI
   detailsSidebar.classList.add("open");
-  if (detailsOverlay) detailsOverlay.classList.add("open");
+  detailsOverlay?.classList.add("open");
 };
 
 function closeDetailsSidebar() {
   if (!detailsSidebar) return;
   detailsSidebar.classList.remove("open");
-  if (detailsOverlay) detailsOverlay.classList.remove("open");
+  detailsOverlay?.classList.remove("open");
   delete detailsSidebar.dataset.currentId;
 }
 
-/* Close via X button */
-if (detailsClose) {
-  detailsClose.addEventListener("click", closeDetailsSidebar);
-}
+detailsClose?.addEventListener("click", closeDetailsSidebar);
 
-/* Clicking on overlay closes the sidebar */
-if (detailsOverlay) {
-  detailsOverlay.addEventListener("click", () => {
-    if (detailsSidebar.classList.contains("open")) {
-      closeDetailsSidebar();
-    }
-  });
-}
+detailsOverlay?.addEventListener("click", () => {
+  if (detailsSidebar.classList.contains("open")) closeDetailsSidebar();
+});
 
-/* Click outside sidebar closes it (except clicks on Details buttons) */
 document.addEventListener("click", e => {
-  if (!detailsSidebar || !detailsSidebar.classList.contains("open")) return;
+  if (!detailsSidebar.classList.contains("open")) return;
 
   if (e.target.closest(".details-btn")) return;
   if (detailsSidebar.contains(e.target)) return;
@@ -932,60 +627,46 @@ document.addEventListener("click", e => {
   closeDetailsSidebar();
 });
 
-/* ESC key closes sidebar */
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && detailsSidebar && detailsSidebar.classList.contains("open")) {
+  if (e.key === "Escape" && detailsSidebar.classList.contains("open"))
     closeDetailsSidebar();
-  }
 });
 
-/* Handle any "Details" button inside popups */
 document.addEventListener("click", e => {
   const btn = e.target.closest(".details-btn");
   if (!btn) return;
 
   const id = btn.dataset.details;
-  if (!id) return;
-
-  openDetailsSidebar(id);
+  if (id) openDetailsSidebar(id);
 });
 
-/* Sidebar HUD click handlers */
-if (detailsHudPrev) {
-  detailsHudPrev.addEventListener("click", () => {
-    if (!window.journeyMode) return;
-    const idx = TRIP_ORDER.indexOf(window.currentID);
-    if (idx > 0 && typeof window.undoTo === "function") {
-      const targetId = TRIP_ORDER[idx - 1];
-      undoTo(targetId);
-      if (detailsSidebar.classList.contains("open")) {
-        openDetailsSidebar(targetId);
-      }
-    }
-  });
-}
+/* HUD INSIDE SIDEBAR */
 
-if (detailsHudNext) {
-  detailsHudNext.addEventListener("click", () => {
-    if (!window.journeyMode) return;
-    const idx = TRIP_ORDER.indexOf(window.currentID);
-    if (idx < TRIP_ORDER.length - 1 && typeof window.animateLeg === "function") {
-      const targetId = TRIP_ORDER[idx + 1];
-      animateLeg(window.currentID, targetId);
-      // animateLeg will call openDetailsSidebar at the end if coded that way,
-      // but we keep sidebar in sync defensively:
-      if (detailsSidebar.classList.contains("open")) {
-        openDetailsSidebar(targetId);
-      }
-    }
-  });
-}
+detailsHudPrev?.addEventListener("click", () => {
+  if (!window.journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(window.currentID);
+  if (idx > 0) {
+    const target = TRIP_ORDER[idx - 1];
+    undoTo(target);
+    openDetailsSidebar(target);
+  }
+});
 
-/* Make sure sidebar HUD stays in sync whenever main HUD updates */
+detailsHudNext?.addEventListener("click", () => {
+  if (!window.journeyMode) return;
+  const idx = TRIP_ORDER.indexOf(window.currentID);
+  if (idx < TRIP_ORDER.length - 1) {
+    const target = TRIP_ORDER[idx + 1];
+    animateLeg(window.currentID, target);
+    openDetailsSidebar(target);
+  }
+});
+
+/* Make HUD auto-sync */
 if (typeof window.updateHUD === "function") {
-  const _origUpdateHUD = window.updateHUD;
+  const original = window.updateHUD;
   window.updateHUD = function () {
-    _origUpdateHUD();
+    original();
     updateDetailsHud();
   };
 }
@@ -997,50 +678,32 @@ if (typeof window.updateHUD === "function") {
 const journeyToggleBtn = document.getElementById("journeyToggle");
 const resetStaticMapBtn = document.getElementById("resetStaticMap");
 
-if (journeyToggleBtn) {
-  journeyToggleBtn.addEventListener("click", () => {
-    if (window.journeyMode) {
-      if (typeof window.resetJourney === "function") resetJourney();
-    } else {
-      if (typeof window.startJourney === "function") startJourney();
-    }
+journeyToggleBtn?.addEventListener("click", () => {
+  if (window.journeyMode) resetJourney();
+  else startJourney();
+});
+
+resetStaticMapBtn?.addEventListener("click", () => {
+  if (window.journeyMode) return;
+
+  window.userInterrupted = false;
+  window.spinning = true;
+
+  closeAllPopups();
+  stopOrbit();
+
+  __MAP.jumpTo({
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+    pitch: 0,
+    bearing: 0
   });
-}
 
-if (resetStaticMapBtn) {
-  resetStaticMapBtn.addEventListener("click", () => {
-    if (window.journeyMode) return;
+  spinGlobe();
 
-    // Reset static globe view – monolith logic adapted to __MAP.
-    window.userInterrupted = false;
-    window.spinning = true;
+  resetStaticMapBtn.style.display = "none";
+});
 
-    if (typeof window.closeAllPopups === "function") {
-      closeAllPopups();
-    }
-    if (typeof window.stopOrbit === "function") {
-      stopOrbit();
-    }
-
-    if (window.__MAP && typeof window.DEFAULT_CENTER !== "undefined" && typeof window.DEFAULT_ZOOM !== "undefined") {
-      __MAP.jumpTo({
-        center: DEFAULT_CENTER,
-        zoom: DEFAULT_ZOOM,
-        pitch: 0,
-        bearing: 0
-      });
-    }
-
-    if (typeof window.spinGlobe === "function") {
-      spinGlobe();
-    }
-
-    resetStaticMapBtn.style.display = "none";
-  });
-}
-
-/* ========================================================================== */
-/* END OF MODULE                                                              */
 /* ========================================================================== */
 
 console.log("%cmap-ui.js fully loaded", "color:#00e5ff;font-weight:bold;");
