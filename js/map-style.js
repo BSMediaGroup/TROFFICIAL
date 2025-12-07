@@ -1,22 +1,33 @@
-/* ============================================================
-   MAP STYLE BOOTSTRAP — v3 (FINAL MONOLITH-ACCURATE VERSION)
-============================================================ */
+/* ========================================================================== */
+/*                              MAP STYLE MODULE                               */
+/*             FINAL MODULAR VERSION — COMPATIBLE WITH PATH-A                 */
+/* ========================================================================== */
 
-console.log("map-style.js loaded");
+console.log("%cmap-style.js loaded", "color:#00eaff; font-weight:bold;");
 
-/* ------------------------------------------------------------
-   BASE MAPBOX STYLE
------------------------------------------------------------- */
 
-const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
+/* ========================================================================== */
+/* GLOBAL MAP SETTINGS (THESE MUST LIVE HERE — NOT IN OTHER FILES)            */
+/* ========================================================================== */
 
-/* Token */
+window.DEFAULT_CENTER = [-100, 35];   // ⬅ your monolith default center
+window.DEFAULT_ZOOM   = 2.45;         // ⬅ your monolith default zoom
+window.ORBIT_ROTATION_SPEED = 0.015;  // ⬅ monolith-accurate spin speed
+
+
+/* ========================================================================== */
+/* MAPBOX TOKEN + BASE STYLE                                                   */
+/* ========================================================================== */
+
 mapboxgl.accessToken =
   "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
-/* ------------------------------------------------------------
-   CREATE MAP INSTANCE
------------------------------------------------------------- */
+const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
+
+
+/* ========================================================================== */
+/* CREATE MAP INSTANCE — MUST HAPPEN BEFORE ANY MODULE TOUCHES __MAP          */
+/* ========================================================================== */
 
 const map = new mapboxgl.Map({
   container: "map",
@@ -32,9 +43,10 @@ window.__MAP = map;
 
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
-/* ------------------------------------------------------------
-   FOG + STARFIELD (1:1 FROM MONOLITH)
------------------------------------------------------------- */
+
+/* ========================================================================== */
+/* GLOBE FOG + STARFIELD                                                       */
+/* ========================================================================== */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
 const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";
@@ -42,98 +54,104 @@ const FOG_HORIZON_BLEND  = 0.45;
 const FOG_SPACE_COLOR    = "#02040A";
 const FOG_STAR_INTENSITY = 0.65;
 
-/* ============================================================
-   STYLE.LOAD — ALL PLACEHOLDER ROUTES + VISIBILITY
-============================================================ */
+
+/* ========================================================================== */
+/* STYLE INITIALISATION                                                        */
+/* ========================================================================== */
 
 map.on("style.load", () => {
-  console.log("map-style.js: style.load fired");
+  console.log("%cmap-style.js: style.load fired", "color:#33ddff");
 
-  /* Atmosphere */
+  /* Apply fog */
   map.setFog({
-    color:          FOG_COLOR,
-    "high-color":   FOG_HIGH_COLOR,
-    "horizon-blend":FOG_HORIZON_BLEND,
-    "space-color":  FOG_SPACE_COLOR,
+    color: FOG_COLOR,
+    "high-color": FOG_HIGH_COLOR,
+    "horizon-blend": FOG_HORIZON_BLEND,
+    "space-color": FOG_SPACE_COLOR,
     "star-intensity": FOG_STAR_INTENSITY
   });
 
-  /* --------------------------------------------------------
-     PLACEHOLDER STATIC ROUTE SOURCES
-     These MUST exist, be empty, and be visible.
-     map-logic.js later REPLACES THEIR DATA.
-  -------------------------------------------------------- */
+  /* --------------------------------------------------------------
+     REQUIRED PLACEHOLDER ROUTE SOURCES
+     These MUST exist BEFORE map-core.js runs its initialisation.
+  -------------------------------------------------------------- */
 
-  function ensureEmptySource(id) {
+  function ensureSource(id) {
     if (!map.getSource(id)) {
       map.addSource(id, {
         type: "geojson",
-        data: { type:"Feature", geometry:{ type:"LineString", coordinates:[] } }
+        data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }}
       });
     }
   }
 
-  /* Required empty shells: */
-  ensureEmptySource("flight-route");
-  ensureEmptySource("drive-route");
+  ensureSource("flight-route");
+  ensureSource("drive-route");
 
-  /* --------------------------------------------------------
-     LAYERS ATTACHED TO PLACEHOLDER ROUTES
-     These MUST exist BEFORE journey layers.
-  -------------------------------------------------------- */
 
-  function ensureLayer(id, source, paint) {
+  /* --------------------------------------------------------------
+     BASE STATIC LAYERS — ALWAYS VISIBLE UNTIL JOURNEY BEGINS
+  -------------------------------------------------------------- */
+
+  function ensureRouteLayer(id, src, paint, before = "waterway-label") {
     if (!map.getLayer(id)) {
-      map.addLayer({
-        id,
-        type: "line",
-        source,
-        layout: { visibility: "visible" },
-        paint
-      });
+      map.addLayer(
+        {
+          id,
+          type: "line",
+          source: src,
+          layout: { visibility: "visible" },
+          paint
+        },
+        before
+      );
     }
   }
 
-  ensureLayer("flight-route", "flight-route", {
+  ensureRouteLayer("flight-route", "flight-route", {
     "line-color": "#478ED3",
     "line-width": 3,
     "line-dasharray": [3, 2],
     "line-opacity": 0.9
   });
 
-  ensureLayer("drive-route", "drive-route", {
+  ensureRouteLayer("drive-route", "drive-route", {
     "line-color": "#FF9C57",
     "line-width": 4,
     "line-opacity": 0.95
   });
 
-  console.log("map-style.js: placeholder route layers ready");
+  console.log("%cmap-style.js: static placeholder layers ready", "color:#33ff33");
 });
 
-/* ============================================================
-   NATION SHADING — EXACT BEHAVIOUR FROM MONOLITH
-============================================================ */
+
+/* ========================================================================== */
+/* NATION LAYERS                                                               */
+/* ========================================================================== */
 
 async function addNation(id, url, color, opacity) {
   if (map.getSource(id)) return;
 
   try {
-    const geo = await (await fetch(url)).json();
+    const data = await (await fetch(url)).json();
 
-    map.addSource(id, { type: "geojson", data: geo });
+    map.addSource(id, { type: "geojson", data });
+
+    map.addLayer(
+      {
+        id: `${id}-fill`,
+        type: "fill",
+        source: id,
+        paint: {
+          "fill-color": color,
+          "fill-opacity": opacity
+        }
+      },
+      "flight-route"   // <-- nations go BELOW route lines
+    );
 
     map.addLayer({
-      id: id + "-fill",
-      type: "fill",
-      source: id,
-      paint: {
-        "fill-color": color,
-        "fill-opacity": opacity
-      }
-    });
-
-    map.addLayer({
-      id: id + "-outline",
+      id: `${id}-outline`,
       type: "line",
       source: id,
       paint: {
@@ -142,18 +160,18 @@ async function addNation(id, url, color, opacity) {
       }
     });
 
-  } catch (e) {
-    console.error("Nation load failed:", e);
+  } catch (err) {
+    console.error("Nation load failed:", id, err);
   }
 }
 
-/* ============================================================
-   initializer — called by map-core.js
-============================================================ */
+
+/* ========================================================================== */
+/* STYLE LAYER INITIALISER — CALLED BY map-core.js AFTER MAP LOAD             */
+/* ========================================================================== */
 
 window.initializeStyleLayers = async function () {
-
-  console.log("initializeStyleLayers() running…");
+  console.log("%cinitializeStyleLayers() running…", "color:#ffaa00");
 
   await addNation(
     "aus",
@@ -176,7 +194,10 @@ window.initializeStyleLayers = async function () {
     0.12
   );
 
-  console.log("initializeStyleLayers() complete.");
+  console.log("%cinitializeStyleLayers() complete", "color:#55ff55; font-weight:bold;");
 };
 
-console.log("%cmap-style.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
+/* ========================================================================== */
+
+console.log("%cmap-style.js fully loaded", "color:#00ffaa; font-weight:bold;");
