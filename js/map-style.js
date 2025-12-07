@@ -1,22 +1,22 @@
 /* ========================================================================== */
 /*                              MAP STYLE MODULE                               */
-/*             FINAL MODULAR VERSION — COMPATIBLE WITH PATH-A                 */
+/*                     FINAL STABLE VERSION — PATH-A FIXED                     */
 /* ========================================================================== */
 
 console.log("%cmap-style.js loaded", "color:#00eaff; font-weight:bold;");
 
 
 /* ========================================================================== */
-/* GLOBAL MAP SETTINGS (THESE MUST LIVE HERE — NOT IN OTHER FILES)            */
+/* GLOBAL DEFAULT MAP SETTINGS — MUST MATCH YOUR ORIGINAL MONOLITH             */
 /* ========================================================================== */
 
-window.DEFAULT_CENTER = [-100, 35];   // ⬅ your monolith default center
-window.DEFAULT_ZOOM   = 2.45;         // ⬅ your monolith default zoom
-window.ORBIT_ROTATION_SPEED = 0.015;  // ⬅ monolith-accurate spin speed
+window.DEFAULT_CENTER = [-95.0, 23.7];   // ⬅ REQUIRED for correct spin axis
+window.DEFAULT_ZOOM   = 2.45;
+window.ORBIT_ROTATION_SPEED = 0.015;
 
 
 /* ========================================================================== */
-/* MAPBOX TOKEN + BASE STYLE                                                   */
+/* TOKEN + BASE STYLE                                                          */
 /* ========================================================================== */
 
 mapboxgl.accessToken =
@@ -26,7 +26,7 @@ const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
 
 
 /* ========================================================================== */
-/* CREATE MAP INSTANCE — MUST HAPPEN BEFORE ANY MODULE TOUCHES __MAP          */
+/* CREATE MAP INSTANCE                                                         */
 /* ========================================================================== */
 
 const map = new mapboxgl.Map({
@@ -40,29 +40,54 @@ const map = new mapboxgl.Map({
 });
 
 window.__MAP = map;
-
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
 
 /* ========================================================================== */
-/* GLOBE FOG + STARFIELD                                                       */
+/* GLOBE FOG                                                                   */
 /* ========================================================================== */
 
-const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
-const FOG_HIGH_COLOR     = "rgba(60, 150, 255, 0.45)";
+const FOG_COLOR          = "rgba(5,10,20,0.9)";
+const FOG_HIGH_COLOR     = "rgba(60,150,255,0.45)";
 const FOG_HORIZON_BLEND  = 0.45;
 const FOG_SPACE_COLOR    = "#02040A";
 const FOG_STAR_INTENSITY = 0.65;
 
 
 /* ========================================================================== */
-/* STYLE INITIALISATION                                                        */
+/* ENSURE ROUTE SOURCES + LAYERS PERSIST THROUGH STYLE RELOADS                */
 /* ========================================================================== */
 
-map.on("style.load", () => {
-  console.log("%cmap-style.js: style.load fired", "color:#33ddff");
+function ensureRouteSource(id) {
+  if (!map.getSource(id)) {
+    map.addSource(id, {
+      type: "geojson",
+      data: { type:"Feature", geometry:{ type:"LineString", coordinates:[] }}
+    });
+  }
+}
 
-  /* Apply fog */
+function ensureRouteLayer(id, src, paint) {
+  if (!map.getLayer(id)) {
+    map.addLayer({
+      id,
+      type: "line",
+      source: src,
+      layout: { visibility:"visible" },
+      paint
+    });
+  }
+}
+
+
+/* ========================================================================== */
+/* STYLEDATA — THE **CORRECT** WAY TO GUARANTEE PERSISTENT LAYERS             */
+/* ========================================================================== */
+
+map.on("styledata", () => {
+  console.log("%cmap-style.js: styledata — persistent layer check", "color:#ffaa33");
+
+  /* Fog re-apply (styledata wipes it) */
   map.setFog({
     color: FOG_COLOR,
     "high-color": FOG_HIGH_COLOR,
@@ -71,43 +96,11 @@ map.on("style.load", () => {
     "star-intensity": FOG_STAR_INTENSITY
   });
 
-  /* --------------------------------------------------------------
-     REQUIRED PLACEHOLDER ROUTE SOURCES
-     These MUST exist BEFORE map-core.js runs its initialisation.
-  -------------------------------------------------------------- */
+  /* PERSISTENT PLACEHOLDER SOURCES */
+  ensureRouteSource("flight-route");
+  ensureRouteSource("drive-route");
 
-  function ensureSource(id) {
-    if (!map.getSource(id)) {
-      map.addSource(id, {
-        type: "geojson",
-        data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }}
-      });
-    }
-  }
-
-  ensureSource("flight-route");
-  ensureSource("drive-route");
-
-
-  /* --------------------------------------------------------------
-     BASE STATIC LAYERS — ALWAYS VISIBLE UNTIL JOURNEY BEGINS
-  -------------------------------------------------------------- */
-
-  function ensureRouteLayer(id, src, paint, before = "waterway-label") {
-    if (!map.getLayer(id)) {
-      map.addLayer(
-        {
-          id,
-          type: "line",
-          source: src,
-          layout: { visibility: "visible" },
-          paint
-        },
-        before
-      );
-    }
-  }
-
+  /* PERSISTENT ROUTE LAYERS */
   ensureRouteLayer("flight-route", "flight-route", {
     "line-color": "#478ED3",
     "line-width": 3,
@@ -120,44 +113,33 @@ map.on("style.load", () => {
     "line-width": 4,
     "line-opacity": 0.95
   });
-
-  console.log("%cmap-style.js: static placeholder layers ready", "color:#33ff33");
 });
 
 
 /* ========================================================================== */
-/* NATION LAYERS                                                               */
+/* NATION LAYER LOADER                                                         */
 /* ========================================================================== */
 
 async function addNation(id, url, color, opacity) {
   if (map.getSource(id)) return;
 
   try {
-    const data = await (await fetch(url)).json();
+    const geo = await (await fetch(url)).json();
 
-    map.addSource(id, { type: "geojson", data });
-
-    map.addLayer(
-      {
-        id: `${id}-fill`,
-        type: "fill",
-        source: id,
-        paint: {
-          "fill-color": color,
-          "fill-opacity": opacity
-        }
-      },
-      "flight-route"   // <-- nations go BELOW route lines
-    );
+    map.addSource(id, { type:"geojson", data: geo });
 
     map.addLayer({
-      id: `${id}-outline`,
+      id: id + "-fill",
+      type: "fill",
+      source: id,
+      paint: { "fill-color": color, "fill-opacity": opacity }
+    }, "flight-route");
+
+    map.addLayer({
+      id: id + "-outline",
       type: "line",
       source: id,
-      paint: {
-        "line-color": color,
-        "line-width": 1.1
-      }
+      paint: { "line-color": color, "line-width": 1.1 }
     });
 
   } catch (err) {
@@ -167,37 +149,32 @@ async function addNation(id, url, color, opacity) {
 
 
 /* ========================================================================== */
-/* STYLE LAYER INITIALISER — CALLED BY map-core.js AFTER MAP LOAD             */
+/* INITIALIZER FOR map-core.js                                                 */
 /* ========================================================================== */
 
 window.initializeStyleLayers = async function () {
-  console.log("%cinitializeStyleLayers() running…", "color:#ffaa00");
+  console.log("initializeStyleLayers() running…");
 
   await addNation(
     "aus",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/AUS.geo.json",
-    "#1561CF",
-    0.12
+    "#1561CF", 0.12
   );
 
   await addNation(
     "can",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json",
-    "#CE2424",
-    0.12
+    "#CE2424", 0.12
   );
 
   await addNation(
     "usa",
     "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/USA.geo.json",
-    "#FFFFFF",
-    0.12
+    "#FFFFFF", 0.12
   );
 
-  console.log("%cinitializeStyleLayers() complete", "color:#55ff55; font-weight:bold;");
+  console.log("%cinitializeStyleLayers() complete", "color:#55ff55");
 };
 
-
-/* ========================================================================== */
 
 console.log("%cmap-style.js fully loaded", "color:#00ffaa; font-weight:bold;");
