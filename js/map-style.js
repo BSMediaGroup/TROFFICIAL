@@ -1,39 +1,58 @@
 /* ============================================================
-   MAP STYLE BOOTSTRAP — FINAL MONOLITH-CLEAN VERSION
+   MAP STYLE BOOTSTRAP — v3 (PATH-A, STATIC ROUTES VIA LOGIC)
 ============================================================ */
 
 console.log("map-style.js loaded");
 
 /* ------------------------------------------------------------
-   BASE STYLE URL + TOKEN
+   BASE MAPBOX STYLE
 ------------------------------------------------------------ */
+
 const MAP_STYLE_URL = "mapbox://styles/mapbox/dark-v11";
 
+/* Token */
 mapboxgl.accessToken =
   "pk.eyJ1IjoiZGFuaWVsY2xhbmN5IiwiYSI6ImNtaW41d2xwNzJhYW0zZnB4bGR0eGNlZjYifQ.qTsXirOA9VxIE8TXHmihyw";
 
 /* ------------------------------------------------------------
-   CREATE MAP INSTANCE (NO RETURNS, NO EARLY EXITS)
+   CREATE MAP INSTANCE
 ------------------------------------------------------------ */
 
 const map = new mapboxgl.Map({
   container: "map",
   style: MAP_STYLE_URL,
   center: DEFAULT_CENTER,
-  zoom:   DEFAULT_ZOOM,
-  pitch:  0,
+  zoom: DEFAULT_ZOOM,
+  pitch: 0,
   renderWorldCopies: false,
   projection: "globe"
 });
 
-window.__MAP = map;   // CRITICAL — MUST SUCCEED BEFORE map-core.js
+window.__MAP = map;
 console.log("map-style.js: __MAP created");
 
-/* Controls */
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
 
 /* ------------------------------------------------------------
-   FOG + SPACE EFFECTS
+   USER INTERRUPTION → stop globe spin + show reset button
+------------------------------------------------------------ */
+
+function interruptSpin() {
+  window.spinning = false;
+  window.userInterrupted = true;
+
+  const resetBtn = document.getElementById("resetStaticMap");
+  if (resetBtn) {
+    resetBtn.style.display = "block";
+  }
+}
+
+["mousedown", "dragstart", "wheel", "touchstart"].forEach(evt => {
+  map.on(evt, interruptSpin);
+});
+
+/* ------------------------------------------------------------
+   FOG + STARFIELD (1:1 FROM MONOLITH)
 ------------------------------------------------------------ */
 
 const FOG_COLOR          = "rgba(5, 10, 20, 0.9)";
@@ -42,29 +61,35 @@ const FOG_HORIZON_BLEND  = 0.45;
 const FOG_SPACE_COLOR    = "#02040A";
 const FOG_STAR_INTENSITY = 0.65;
 
-/* ------------------------------------------------------------
-   ON STYLE LOAD — CREATE PLACEHOLDER ROUTE SOURCES + LAYERS
------------------------------------------------------------- */
+/* ============================================================
+   STYLE.LOAD — PLACEHOLDER ROUTES
+============================================================ */
 
 map.on("style.load", () => {
   console.log("map-style.js: style.load fired");
 
+  /* Atmosphere */
   map.setFog({
-    color: FOG_COLOR,
-    "high-color": FOG_HIGH_COLOR,
+    color:           FOG_COLOR,
+    "high-color":    FOG_HIGH_COLOR,
     "horizon-blend": FOG_HORIZON_BLEND,
-    "space-color": FOG_SPACE_COLOR,
-    "star-intensity": FOG_STAR_INTENSITY
+    "space-color":   FOG_SPACE_COLOR,
+    "star-intensity":FOG_STAR_INTENSITY
   });
 
-  /* --- REQUIRED EMPTY SOURCES --- */
+  /* --------------------------------------------------------
+     PLACEHOLDER STATIC ROUTE SOURCES
+     These MUST exist & be visible; map-logic.js fills data.
+  -------------------------------------------------------- */
 
   function ensureEmptySource(id) {
     if (!map.getSource(id)) {
       map.addSource(id, {
         type: "geojson",
-        data: { type:"Feature",
-                geometry:{ type:"LineString", coordinates:[] } }
+        data: {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [] }
+        }
       });
     }
   }
@@ -72,7 +97,9 @@ map.on("style.load", () => {
   ensureEmptySource("flight-route");
   ensureEmptySource("drive-route");
 
-  /* --- REQUIRED LAYERS --- */
+  /* --------------------------------------------------------
+     LAYERS ATTACHED TO PLACEHOLDER ROUTES
+  -------------------------------------------------------- */
 
   function ensureLayer(id, source, paint) {
     if (!map.getLayer(id)) {
@@ -102,9 +129,9 @@ map.on("style.load", () => {
   console.log("map-style.js: static placeholder routes ready");
 });
 
-/* ------------------------------------------------------------
-   NATION SHADING
------------------------------------------------------------- */
+/* ============================================================
+   NATION SHADING — EXACT BEHAVIOUR FROM MONOLITH
+============================================================ */
 
 async function addNation(id, url, color, opacity) {
   if (map.getSource(id)) return;
@@ -134,16 +161,17 @@ async function addNation(id, url, color, opacity) {
       }
     });
 
-  } catch (err) {
-    console.error("Nation load failed:", err);
+  } catch (e) {
+    console.error("Nation load failed:", e);
   }
 }
 
-/* ------------------------------------------------------------
-   CALLED BY map-core.js
------------------------------------------------------------- */
+/* ============================================================
+   initializer — called by map-core.js
+============================================================ */
 
 window.initializeStyleLayers = async function () {
+
   console.log("initializeStyleLayers() running...");
 
   await addNation(
