@@ -46,7 +46,6 @@ const IMG_TOMSRIVER  = "https://raw.githubusercontent.com/BSMediaGroup/Resources
 /* ==========================================================================
    FULL WAYPOINT LIST — EXACT 1:1 FROM MONOLITH
    ========================================================================== */
-
 const WAYPOINTS = [
   /* ————————————————— SYDNEY ————————————————— */
   {
@@ -259,7 +258,7 @@ const WAYPOINTS = [
     }
   },
 
-  /* ————————————————— ALL REMAINING 14 WAYPOINTS ————————————————— */
+  /* ————————————————— REMAINING WAYPOINTS ————————————————— */
   {
     id:"batavia",
     role:"minor",
@@ -692,16 +691,19 @@ const WAYPOINTS = [
 
 /* ==========================================================================
    TRIP ORDER — FULL SEQUENCE (MONOLITH)
+   IMPORTANT FIX:
+   Do NOT override TRIP_ORDER defined earlier in map-config.js.
    ========================================================================== */
-const TRIP_ORDER = WAYPOINTS.map(w => w.id);
+const TRIP_ORDER = window.TRIP_ORDER || WAYPOINTS.map(w => w.id);
 
 /* ==========================================================================
-   DRIVE ORDER — All waypoints AFTER Toronto
+   DRIVE ORDER — all waypoints after Toronto (unless map-config.js overrides)
    ========================================================================== */
-const DRIVE_ORDER = TRIP_ORDER.slice(TRIP_ORDER.indexOf("toronto"));
+const DRIVE_ORDER =
+  window.DRIVE_ORDER || TRIP_ORDER.slice(TRIP_ORDER.indexOf("toronto"));
 
 /* ==========================================================================
-   EXPORT GLOBALS (required by map-core.js)
+   EXPORT GLOBALS
    ========================================================================== */
 window.WAYPOINTS   = WAYPOINTS;
 window.TRIP_ORDER  = TRIP_ORDER;
