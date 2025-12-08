@@ -86,75 +86,190 @@ window.getCurrencyInfo = function (code) {
 };
 
 /* ============================================================
-   TIMEZONE HELPERS — FIXED (CORRECT DAY + DATE + LOCAL TIME)
+   TIMEZONE HELPERS
    ============================================================ */
 
+/**
+ * Internal helper: safely extract UTC offset minutes from waypoint meta.
+ * Supports:
+ *   - meta.utcOffsetMinutes (number, e.g. -300)
+ *   - meta.utcOffset / meta.utc_offset / meta.utc (string, e.g. "UTC-05:00" or "-05:00")
+ */
+function getUtcOffsetMinutesFromMeta(meta) {
+  if (!meta) return null;
+
+  if (typeof meta.utcOffsetMinutes === "number" && isFinite(meta.utcOffsetMinutes)) {
+    return meta.utcOffsetMinutes;
+  }
+
+  const raw =
+    meta.utcOffset ??
+    meta.utc_offset ??
+    meta.utc ??
+    null;
+
+  if (!raw || typeof raw !== "string") return null;
+
+  // Strip any leading "UTC" / "GMT"
+  let s = raw.trim().toUpperCase();
+  if (s.startsWith("UTC")) s = s.slice(3).trim();
+  if (s.startsWith("GMT")) s = s.slice(3).trim();
+
+  // Expect something like "+05:00" or "-03:30" or "05:00"
+  const m = s.match(/^([+-])?(\d{1,2})(?::(\d{2}))?$/);
+  if (!m) return null;
+
+  const sign = m[1] === "-" ? -1 : 1;
+  const hours = parseInt(m[2], 10);
+  const mins  = m[3] ? parseInt(m[3], 10) : 0;
+
+  if (!isFinite(hours) || !isFinite(mins)) return null;
+
+  return sign * (hours * 60 + mins);
+}
+
+/**
+ * Internal helper: convert "now" to a Date in the target offset.
+ * Uses host clock only as a source of current UTC, then applies offset.
+ */
+function getLocalDateFromOffset(offsetMinutes) {
+  const now = new Date();
+  // Convert host local time → UTC
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  // Apply waypoint offset (minutes from UTC)
+  const localMs = utcMs + offsetMinutes * 60000;
+  return new Date(localMs);
+}
+
 window.formatLocalTime = function (wp) {
-  const tz = wp.meta?.timezone;
-  const locale = wp.meta?.locale || "en-US";
-  if (!tz) return "Time unavailable";
+  if (!wp || !wp.meta) return "Time unavailable";
+
+  const meta   = wp.meta;
+  const tz     = meta.timezone;
+  const locale = meta.locale || "en-US";
+
+  // Try to use explicit UTC offset first (MOST RELIABLE)
+  const offsetMinutes = getUtcOffsetMinutesFromMeta(meta);
 
   try {
-    const now = new Date(); // current universal moment
+    let weekday, dateStr, timeStr;
 
-    // Weekday in target timezone
-    const weekday = new Intl.DateTimeFormat(locale, {
-      timeZone: tz,
-      weekday: "long"
-    }).format(now);
+    if (offsetMinutes !== null && isFinite(offsetMinutes)) {
+      // Use explicit offset → build a synthetic local Date
+      const localDate = getLocalDateFromOffset(offsetMinutes);
 
-    // Date in MM/DD/YYYY
-    const dateStr = new Intl.DateTimeFormat("en-US", {
-      timeZone: tz,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(now);
+      weekday = new Intl.DateTimeFormat(locale, {
+        weekday: "long"
+      }).format(localDate);
 
-    // Correct 12h local time
-    const timeStr = new Intl.DateTimeFormat(locale, {
-      timeZone: tz,
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    }).format(now);
+      dateStr = new Intl.DateTimeFormat(locale, {
+        month: "2-digit",
+        day:   "2-digit",
+        year:  "numeric"
+      }).format(localDate);
 
-    return `${weekday}, ${dateStr} — ${timeStr}`;
+      timeStr = new Intl.DateTimeFormat(locale, {
+        hour:   "numeric",
+        minute: "2-digit",
+        hour12: true
+      }).format(localDate);
+    } else if (tz) {
+      // Fallback: use IANA timezone with Intl
+      const now = new Date();
 
-  } catch (err) {
-    console.error("formatLocalTime() failed:", err);
+      weekday = new Intl.DateTimeFormat(locale, {
+        timeZone: tz,
+        weekday: "long"
+      }).format(now);
+
+      dateStr = new Intl.DateTimeFormat(locale, {
+        timeZone: tz,
+        month: "2-digit",
+        day:   "2-digit",
+        year:  "numeric"
+      }).format(now);
+
+      timeStr = new Intl.DateTimeFormat(locale, {
+        timeZone: tz,
+        hour:   "numeric",
+        minute: "2-digit",
+        hour12: true
+      }).format(now);
+    } else {
+      // Last resort: host local time, no timezone data
+      const now = new Date();
+
+      weekday = new Intl.DateTimeFormat(locale, {
+        weekday: "long"
+      }).format(now);
+
+      dateStr = new Intl.DateTimeFormat(locale, {
+        month: "2-digit",
+        day:   "2-digit",
+        year:  "numeric"
+      }).format(now);
+
+      timeStr = new Intl.DateTimeFormat(locale, {
+        hour:   "numeric",
+        minute: "2-digit",
+        hour12: true
+      }).format(now);
+    }
+
+    // Normalise time to "1:45am" / "10:07pm" (no space, lowercase)
+    timeStr = timeStr
+      .replace(/\s?AM/i, "am")
+      .replace(/\s?PM/i, "pm");
+
+    // Final format: "Monday, 12/08/2025 - 1:45am"
+    return `${weekday}, ${dateStr} - ${timeStr}`;
+  } catch {
     return "Time unavailable";
   }
 };
 
-
 window.formatTimeZoneWithOffset = function (wp) {
-  const tz = wp.meta?.timezone;
-  const locale = wp.meta?.locale || "en-US";
-  if (!tz) return "N/A";
+  if (!wp || !wp.meta) return "N/A";
+
+  const meta   = wp.meta;
+  const tz     = meta.timezone || "UTC";
+  const locale = meta.locale || "en-US";
+
+  // Try to use the explicit UTC offset first
+  const offsetMinutes = getUtcOffsetMinutesFromMeta(meta);
 
   try {
-    const now = new Date();
+    let offsetLabel = "";
 
-    const fmt = new Intl.DateTimeFormat(locale, {
-      timeZone: tz,
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZoneName: "shortOffset"
-    });
+    if (offsetMinutes !== null && isFinite(offsetMinutes)) {
+      const sign = offsetMinutes >= 0 ? "+" : "-";
+      const abs  = Math.abs(offsetMinutes);
+      const hh   = String(Math.floor(abs / 60)).padStart(2, "0");
+      const mm   = String(abs % 60).padStart(2, "0");
+      offsetLabel = `UTC${sign}${hh}:${mm}`;
+    } else {
+      // Fallback: derive from IANA timezone using Intl
+      const now = new Date();
 
-    const parts = fmt.formatToParts(now);
-    let offset = parts.find(p => p.type === "timeZoneName")?.value || "";
+      const fmt = new Intl.DateTimeFormat(locale, {
+        timeZone: tz,
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZoneName: "shortOffset"
+      });
 
-    // Normalize GMT → UTC
-    if (offset.startsWith("GMT")) {
-      offset = "UTC" + offset.slice(3);
+      const parts = fmt.formatToParts(now);
+      let rawName = parts.find(p => p.type === "timeZoneName")?.value || "";
+
+      if (rawName.toUpperCase().startsWith("GMT")) {
+        rawName = "UTC" + rawName.slice(3);
+      }
+      offsetLabel = rawName || "UTC";
     }
 
-    return `${tz} (${offset})`;
-
-  } catch (err) {
-    console.error("formatTimeZoneWithOffset() failed:", err);
+    return `${tz} (${offsetLabel})`;
+  } catch {
+    // If anything explodes, at least show the timezone string
     return tz;
   }
 };
@@ -204,4 +319,3 @@ window.CONFIG = {
 };
 
 console.log("%cmap-config.js fully loaded", "color:#00e5ff;font-weight:bold;");
-
