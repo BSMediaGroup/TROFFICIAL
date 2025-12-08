@@ -195,9 +195,11 @@ window.buildMarkers = function () {
         duration: 900
       });
 
-      // ★ FIX — user interruption must stop spin immediately
       window.spinning = false;
       window.userInterrupted = true;
+
+      const btn = document.getElementById("resetStaticMap");
+      if (btn && !window.journeyMode) btn.style.display = "block";
     });
 
     el.addEventListener("dblclick", ev => {
@@ -210,7 +212,7 @@ window.buildMarkers = function () {
 
   function updateMinorMarkers() {
     const z = __MAP.getZoom();
-    const show = z >= 5.25;   // ★ FIX: stabilise threshold for Mapbox GL v3
+    const show = z >= 5.25;
     MINOR_MARKERS.forEach(m => {
       const el = m.getElement();
       if (el) el.style.display = show ? "block" : "none";
@@ -246,7 +248,6 @@ document.addEventListener("click", ev => {
 
   if (!dir || !tgt) return;
 
-  // ★ FIX — prevent double-trigger spam during animation
   if (window.__ANIMATING__) return;
 
   if (!window.journeyMode) {
@@ -702,15 +703,26 @@ if (typeof window.updateHUD === "function") {
 const journeyToggleBtn = document.getElementById("journeyToggle");
 const resetStaticMapBtn = document.getElementById("resetStaticMap");
 
+/* ★★★ MOD #1 — JOURNEY BUTTON LABEL UPDATER ★★★ */
+function updateJourneyButton() {
+  if (!journeyToggleBtn) return;
+  journeyToggleBtn.textContent = window.journeyMode ? "Reset Journey" : "Start Journey";
+}
+
+/* ★★★ MOD #2 — UPDATED CLICK HANDLER ★★★ */
 journeyToggleBtn?.addEventListener("click", () => {
-  if (window.journeyMode) resetJourney();
-  else startJourney();
+  if (window.journeyMode) {
+    resetJourney();
+  } else {
+    startJourney();
+  }
+  updateJourneyButton(); // <—— ensures label updates live
 });
 
 resetStaticMapBtn?.addEventListener("click", () => {
   if (window.journeyMode) return;
 
-  window.userInterrupted = true; // ★ FIX — must stop default spin
+  window.userInterrupted = true; 
   window.spinning = false;
 
   closeAllPopups();
@@ -723,7 +735,6 @@ resetStaticMapBtn?.addEventListener("click", () => {
     bearing: 0
   });
 
-  // A reset must re-enable the default spin again after movement
   setTimeout(() => {
     window.spinning = true;
     spinGlobe();
@@ -731,6 +742,9 @@ resetStaticMapBtn?.addEventListener("click", () => {
 
   resetStaticMapBtn.style.display = "none";
 });
+
+/* Ensure correct label on page load */
+updateJourneyButton();
 
 /* ========================================================================== */
 
