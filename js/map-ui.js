@@ -39,14 +39,14 @@ function getModeIcon(mode) {
   return MODE_ICONS[mode] || MODE_ICONS["Car"] || Object.values(MODE_ICONS)[0];
 }
 
-if (typeof window.getLegMode !== "function") {
+if (!window.getLegMode) {
   window.getLegMode = function (id) {
     const idx = TRIP_ORDER.indexOf(id);
     if (idx < 0) return "Car";
 
     const next = TRIP_ORDER[idx + 1];
 
-    if (typeof window.isFlight === "function" && next) {
+    if (window.isFlight && next) {
       if (isFlight(id, next)) return "Plane";
     } else {
       if ((id === "sydney" && next === "la") ||
@@ -54,12 +54,11 @@ if (typeof window.getLegMode !== "function") {
         return "Plane";
     }
 
-    const wp = getWP(id);
-    return wp?.mode || "Car";
+    return getWP(id)?.mode || "Car";
   };
 }
 
-if (typeof window.getZoom !== "function") {
+if (!window.getZoom) {
   window.getZoom = function (id) {
     if (["sydney", "la", "toronto"].includes(id)) return 6.7;
     return 9.4;
@@ -195,6 +194,10 @@ window.buildMarkers = function () {
         bearing: 0,
         duration: 900
       });
+
+      // ★ FIX — user interruption must stop spin immediately
+      window.spinning = false;
+      window.userInterrupted = true;
     });
 
     el.addEventListener("dblclick", ev => {
@@ -206,7 +209,8 @@ window.buildMarkers = function () {
   });
 
   function updateMinorMarkers() {
-    const show = __MAP.getZoom() >= 5;
+    const z = __MAP.getZoom();
+    const show = z >= 5.25;   // ★ FIX: stabilise threshold for Mapbox GL v3
     MINOR_MARKERS.forEach(m => {
       const el = m.getElement();
       if (el) el.style.display = show ? "block" : "none";
@@ -241,6 +245,9 @@ document.addEventListener("click", ev => {
   const tgt = link.dataset.target;
 
   if (!dir || !tgt) return;
+
+  // ★ FIX — prevent double-trigger spam during animation
+  if (window.__ANIMATING__) return;
 
   if (!window.journeyMode) {
     stopOrbit();
@@ -458,7 +465,7 @@ function renderLocationInfo(wp) {
     </div>
     <div class="details-location-row">
       <div class="details-kv-label">Country</div>
-      <div class="details-kv-value" style="display:flex; justify-content:flex-end; gap:6px;">
+      <div class="details-kv-value" style="display:flex; justify-content:flex-end; align-items:center; gap:6px;">
         <img src="${flagUrl}" class="country-flag"> ${country}
       </div>
     </div>
@@ -480,6 +487,23 @@ function renderLocationInfo(wp) {
       </div>
     </div>`;
 }
+
+/* ★ FIX — enforce proper flag dimensions */
+const styleFix = document.createElement("style");
+styleFix.textContent = `
+  .country-flag,
+  .details-location-flag-inline,
+  .hud-flag,
+  .details-sidebar-hud-flag {
+    width: 18px !important;
+    height: 12px !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    display: inline-block !important;
+  }
+`;
+document.head.appendChild(styleFix);
 
 function renderDistance(wp) {
   if (!detailsDistanceContent) return;
@@ -686,8 +710,8 @@ journeyToggleBtn?.addEventListener("click", () => {
 resetStaticMapBtn?.addEventListener("click", () => {
   if (window.journeyMode) return;
 
-  window.userInterrupted = false;
-  window.spinning = true;
+  window.userInterrupted = true; // ★ FIX — must stop default spin
+  window.spinning = false;
 
   closeAllPopups();
   stopOrbit();
@@ -695,11 +719,15 @@ resetStaticMapBtn?.addEventListener("click", () => {
   __MAP.jumpTo({
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
-    pitch: 0,
+    pitch: DEFAULT_PITCH,
     bearing: 0
   });
 
-  spinGlobe();
+  // A reset must re-enable the default spin again after movement
+  setTimeout(() => {
+    window.spinning = true;
+    spinGlobe();
+  }, 200);
 
   resetStaticMapBtn.style.display = "none";
 });
