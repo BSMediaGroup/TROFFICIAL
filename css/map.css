@@ -769,3 +769,11 @@ html, body {
   font-style: italic;
   color: #888;
 }
+
+/* FIX — Prevent CSS from forcing all map layers to brighten */
+mapboxgl-canvas,
+canvas.mapboxgl-canvas {
+    mix-blend-mode: normal !important;
+    filter: none !important;
+}
+
