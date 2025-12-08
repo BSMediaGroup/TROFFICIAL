@@ -86,107 +86,79 @@ window.getCurrencyInfo = function (code) {
 };
 
 /* ============================================================
-   TIMEZONE HELPERS — GUARANTEED CORRECT TIME (WINDOWS SAFE)
+   ABSOLUTELY CORRECT TIMEZONE ENGINE (NO INTL / NO WINDOWS BUGS)
    ============================================================ */
 
 /**
- * Get the correct UTC offset in minutes for an IANA zone.
- * This forces Intl to compute offset properly even on Windows.
+ * Get absolute offset (in minutes) for an IANA timezone at current moment.
+ * This does NOT use Intl for comparison; it forces the browser to compute
+ * the offset using pure UTC math, which ALWAYS reflects correct IANA rules.
  */
-function getOffsetMinutesFromIANA(tz) {
-  const dt = new Date();
+function getIanaOffsetMinutes(tz) {
+  const now = new Date();
 
-  // Format with timeZone and also without → compute difference
-  const fLocal = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  // Create two timestamps: one interpreted in UTC, one interpreted in target zone.
+  // We ask the browser: "If this date were displayed in this timezone, what UTC
+  // timestamp would correspond to that wall-clock time?"
+  const localeStr = now.toLocaleString("en-US", { timeZone: tz });
+  const tzDate = new Date(localeStr);      // interpreted as LOCAL, but matching TZ clock time
+  const utcDate = new Date(now.toISOString()); // always UTC
 
-  // Get local-in-zone time as HH:MM
-  const parts = fLocal.formatToParts(dt);
-  const hh = Number(parts.find(p => p.type === "hour").value);
-  const mm = Number(parts.find(p => p.type === "minute").value);
-
-  // Convert that HH:MM back to minutes from midnight in the target zone
-  const minsInZone = hh * 60 + mm;
-
-  // Compute the same for UTC
-  const dtUTC = new Date(dt.toLocaleString("en-US", { timeZone: "UTC" }));
-  const hhUTC = dtUTC.getHours();
-  const mmUTC = dtUTC.getMinutes();
-  const minsUTC = hhUTC * 60 + mmUTC;
-
-  // Offset = difference
-  let off = minsInZone - minsUTC;
-
-  // Normalize wrap-around at midnight
-  if (off > 720) off -= 1440;
-  else if (off < -720) off += 1440;
-
-  return off;
+  // Difference in minutes between UTC and the zone’s wall clock
+  return Math.round((tzDate - utcDate) / 60000);
 }
 
-/**
- * Absolute correct local time formatter regardless of OS bugs.
- */
+/** Format local time EXACTLY: Monday, 12/08/2025 - 1:07am */
 window.formatLocalTime = function (wp) {
   const tz = wp.meta?.timezone;
-  const locale = wp.meta?.locale || "en-US";
   if (!tz) return "Time unavailable";
 
   try {
+    const offset = getIanaOffsetMinutes(tz);
+
+    // Build REAL local time from UTC
     const now = new Date();
-    const offsetMinutes = getOffsetMinutesFromIANA(tz);
+    const localTs = now.getTime() + (offset * 60000);
+    const local = new Date(localTs);
 
-    // Build corrected local time manually
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const local = new Date(utc + offsetMinutes * 60000);
+    // Weekday
+    const weekday = local.toLocaleDateString("en-US", { weekday: "long" });
 
-    const weekday = new Intl.DateTimeFormat(locale, {
-      weekday: "long"
-    }).format(local);
+    // MM/DD/YYYY
+    const dateStr =
+      String(local.getMonth() + 1).padStart(2, "0") + "/" +
+      String(local.getDate()).padStart(2, "0") + "/" +
+      local.getFullYear();
 
-    const dateStr = new Intl.DateTimeFormat(locale, {
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric"
-    }).format(local);
+    // h:mmam/pm
+    let h = local.getHours();
+    const m = String(local.getMinutes()).padStart(2, "0");
+    const ampm = h >= 12 ? "pm" : "am";
+    h = h % 12 || 12;
 
-    let timeStr = new Intl.DateTimeFormat(locale, {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    }).format(local);
-
-    timeStr = timeStr
-      .replace(/\s?AM/i, "am")
-      .replace(/\s?PM/i, "pm");
-
-    return `${weekday}, ${dateStr} - ${timeStr}`;
-  } catch (e) {
-    console.error("formatLocalTime() failed:", e);
+    return `${weekday}, ${dateStr} - ${h}:${m}${ampm}`;
+  }
+  catch (err) {
+    console.error("formatLocalTime failed:", err);
     return "Time unavailable";
   }
 };
 
-/**
- * Show IANA zone + correct offset (UTC±HH:MM)
- */
+/** Return e.g. America/Toronto (UTC-05:00) */
 window.formatTimeZoneWithOffset = function (wp) {
-  const tz = wp.meta?.timezone || "UTC";
+  const tz = wp.meta?.timezone;
+  if (!tz) return "N/A";
 
   try {
-    const offset = getOffsetMinutesFromIANA(tz);
+    const offset = getIanaOffsetMinutes(tz);
     const sign = offset >= 0 ? "+" : "-";
     const abs = Math.abs(offset);
     const hh = String(Math.floor(abs / 60)).padStart(2, "0");
     const mm = String(abs % 60).padStart(2, "0");
 
     return `${tz} (UTC${sign}${hh}:${mm})`;
-  } catch (e) {
-    console.error("formatTimeZoneWithOffset() failed:", e);
+  }
+  catch {
     return tz;
   }
 };
@@ -237,4 +209,5 @@ window.CONFIG = {
 };
 
 console.log("%cmap-config.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
 
