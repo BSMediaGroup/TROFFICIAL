@@ -1,11 +1,11 @@
 /* ============================================================
-   MAP CONFIG MODULE — v5 (FINAL + SAFE TIMEZONE ENGINE)
+   MAP CONFIG MODULE — v5 (FINAL, CLEAN, CONSISTENT TIMEZONE)
    ============================================================ */
 
 console.log("map-config.js loaded");
 
 /* ============================================================
-   DEFAULT MAP VIEW SETTINGS
+   DEFAULT MAP VIEW SETTINGS (TRUE MONOLITH VALUES)
    ============================================================ */
 
 window.DEFAULT_CENTER = [-100, 40];
@@ -23,11 +23,11 @@ window.journeyMode     = false;
 window.currentID       = null;
 
 /* ============================================================
-   ORBIT CAMERA CONSTANTS — WITH CRASH FIX
+   ORBIT CAMERA CONSTANTS
    ============================================================ */
 
 window.ORBIT_ZOOM_TARGET    = 12.5;
-window.ORBIT_PITCH_TARGET   = 60;    // MUST NOT exceed 60 in globe mode
+window.ORBIT_PITCH_TARGET   = 60;    // keep ≤ 60 for globe stability
 window.ORBIT_ROTATION_SPEED = 0.015;
 window.ORBIT_ENTRY_DURATION = 900;
 
@@ -40,6 +40,17 @@ window.JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;
 window.JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5;
 
 /* ============================================================
+   IMPORTANT NOTE ABOUT TRIP ORDER
+   ============================================================ */
+/*
+   TRIP_ORDER **must ONLY be defined in map-data.js**, because the waypoint
+   list is the single source of truth.
+
+   Therefore:
+     We DO NOT define TRIP_ORDER or DRIVE_ORDER here.
+*/
+
+/* ============================================================
    MODE ICONS
    ============================================================ */
 
@@ -49,7 +60,7 @@ window.MODE_ICONS = {
 };
 
 /* ============================================================
-   CURRENCY MAP
+   CURRENCY MAP + HELPERS
    ============================================================ */
 
 window.CURRENCY_INFO = {
@@ -63,109 +74,87 @@ window.getCurrencyInfo = function (code) {
 };
 
 /* ============================================================
-   *** TRUE SAFE TIMEZONE ENGINE (NO LOCALE PARSE BUGS) ***
+   TIMEZONE HELPERS — SINGLE SOURCE = Intl
    ============================================================ */
 /*
-   This version does NOT:
-     - call new Date(localeString)   ❌ (causes wrong offsets)
-     - rely on browser locale order  ❌ (MDY/DMY bug)
-   Instead it uses Intl.formatToParts(), which is:
-     ✓ immune to locale formatting bugs
-     ✓ 100% accurate for DST in all IANA zones
-     ✓ extremely fast
+   The key rule now:
+
+     - We do NOT try to build offsets manually
+     - We do NOT parse locale strings back into Dates
+     - We let Intl do *all* the heavy lifting
+
+   That way:
+     - The "local time" display and
+     - The "UTC±hh:mm" label
+
+   are both derived from the same engine, so they cannot diverge.
 */
 
-function getOffsetMinutes(tz) {
-  const now = new Date();
-
-  // Extract the "virtual" clock time for that time zone
-  const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-
-  const parts = fmt.formatToParts(now);
-
-  const Y = +parts.find(p => p.type === "year").value;
-  const M = +parts.find(p => p.type === "month").value - 1;
-  const D = +parts.find(p => p.type === "day").value;
-  const h = +parts.find(p => p.type === "hour").value;
-  const m = +parts.find(p => p.type === "minute").value;
-  const s = +parts.find(p => p.type === "second").value;
-
-  // Build UTC timestamps of:
-  // – actual UTC time
-  // – equivalent timestamp in that timezone
-  const utcTs = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-    now.getUTCHours(),
-    now.getUTCMinutes(),
-    now.getUTCSeconds(),
-    now.getUTCMilliseconds()
-  );
-
-  const zonedTs = Date.UTC(Y, M, D, h, m, s, now.getUTCMilliseconds());
-
-  return Math.round((zonedTs - utcTs) / 60000);
-}
-
-/* ============================================================
-   LOCAL TIME DISPLAY: Monday, 12/08/2025 - 1:07am
-   ============================================================ */
-
+/** Local time string: "Monday, 12/08/2025 - 1:07am" */
 window.formatLocalTime = function (wp) {
-  const tz = wp.meta?.timezone;
+  const tz     = wp.meta?.timezone;
+  const locale = wp.meta?.locale || "en-US";
   if (!tz) return "Time unavailable";
 
   try {
-    const offset = getOffsetMinutes(tz);
+    const now = new Date();
 
-    const nowUTC = Date.now();
-    const local = new Date(nowUTC + offset * 60000);
+    // We use formatToParts so we can build your exact layout.
+    const fmt = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      weekday: "long",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
 
-    const weekday = local.toLocaleDateString("en-US", { weekday: "long" });
+    const parts = fmt.formatToParts(now);
 
-    const MM = String(local.getMonth() + 1).padStart(2, "0");
-    const DD = String(local.getDate()).padStart(2, "0");
-    const YYYY = local.getFullYear();
+    const weekday   = parts.find(p => p.type === "weekday")?.value || "";
+    const month     = parts.find(p => p.type === "month")?.value || "";
+    const day       = parts.find(p => p.type === "day")?.value || "";
+    const year      = parts.find(p => p.type === "year")?.value || "";
+    const hour      = parts.find(p => p.type === "hour")?.value || "";
+    const minute    = parts.find(p => p.type === "minute")?.value || "";
+    const dayPeriod = (parts.find(p => p.type === "dayPeriod")?.value || "").toLowerCase();
 
-    let h = local.getHours();
-    const m = String(local.getMinutes()).padStart(2, "0");
-    const ampm = h >= 12 ? "pm" : "am";
-    h = h % 12 || 12;
-
-    return `${weekday}, ${MM}/${DD}/${YYYY} - ${h}:${m}${ampm}`;
+    // Force MM/DD/YYYY & "am"/"pm" style regardless of locale quirks
+    const dateStr = `${month}/${day}/${year}`;
+    return `${weekday}, ${dateStr} - ${hour}:${minute}${dayPeriod}`;
   } catch (err) {
     console.error("formatLocalTime failed:", err);
     return "Time unavailable";
   }
 };
 
-/* ============================================================
-   TIMEZONE LABEL DISPLAY: America/Toronto (UTC-05:00)
-   ============================================================ */
-
+/** Timezone label: "America/Toronto (UTC-05:00)" */
 window.formatTimeZoneWithOffset = function (wp) {
-  const tz = wp.meta?.timezone;
+  const tz     = wp.meta?.timezone;
+  const locale = wp.meta?.locale || "en-US";
   if (!tz) return "N/A";
 
   try {
-    const offset = getOffsetMinutes(tz);
-    const sign = offset >= 0 ? "+" : "-";
-    const abs = Math.abs(offset);
-    const hh = String(Math.floor(abs / 60)).padStart(2, "0");
-    const mm = String(abs % 60).padStart(2, "0");
+    const now = new Date();
 
-    return `${tz} (UTC${sign}${hh}:${mm})`;
-  } catch {
+    const fmt = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "shortOffset"
+    });
+
+    const parts = fmt.formatToParts(now);
+    let offset  = parts.find(p => p.type === "timeZoneName")?.value || "";
+
+    // Normalise GMT→UTC just for aesthetics
+    if (offset.startsWith("GMT")) offset = "UTC" + offset.slice(3);
+
+    return `${tz} (${offset})`;
+  } catch (err) {
+    console.error("formatTimeZoneWithOffset failed:", err);
     return tz;
   }
 };
@@ -196,7 +185,7 @@ window.mapWeatherCodeToInfo = function (code) {
 };
 
 /* ============================================================
-   EXPORT CONFIG
+   EXPORT
    ============================================================ */
 
 window.CONFIG = {
