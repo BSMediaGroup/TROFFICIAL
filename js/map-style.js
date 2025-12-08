@@ -31,10 +31,10 @@ const map = new mapboxgl.Map({
 window.__MAP = map;
 console.log("map-style.js: __MAP created");
 
-/* ★ FIX — Prevent Mapbox GL v3 globe projection spam errors */
-map._renderTaskQueue = [];   // <-- REQUIRED PATCH, DO NOT REMOVE
-
 map.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
+
+/* ------------------------------------------------------------ */
+
 
 
 
@@ -228,4 +228,5 @@ window.initializeStyleLayers = async function () {
 };
 
 console.log("%cmap-style.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
 
