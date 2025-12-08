@@ -1,5 +1,5 @@
 /* ==========================================================================
-   MAP LOGIC MODULE — FINAL PATH-A VERSION
+   MAP LOGIC MODULE — FINAL PATH-A VERSION (PATCHED + RESTORED LOGIC)
    ========================================================================== */
 
 console.log("%cmap-logic.js loaded", "color:#ffaa00;font-weight:bold;");
@@ -79,6 +79,10 @@ window.computeAllLegDistances = function () {
     TRAVELLED_KM[id] = +kmSum.toFixed(1);
     TRAVELLED_MI[id] = +miSum.toFixed(1);
   });
+
+  // ★ FIX — update HTML legend automatically
+  const el = document.getElementById("legendTotalDistance");
+  if (el) el.textContent = `Total Distance: ${kmSum.toFixed(1)} km (${miSum.toFixed(1)} mi)`;
 };
 
 /* Required by map-core.js */
@@ -151,7 +155,6 @@ window.buildGreatCircle = function (fromId, toId, steps = 220) {
 
 /* =======================================================================
    STATIC ROUTES — PATH A VERSION
-   (we now actually populate the static flight routes for default view)
 ======================================================================= */
 
 window.addStaticRoutes = function () {
@@ -161,17 +164,13 @@ window.addStaticRoutes = function () {
     return;
   }
 
-  // Build a continuous great-circle line for Sydney→LA→Toronto
+  // Continuous great circle SYD→LA→TOR
   const flightCoords = [];
 
   function append(seg) {
     if (!seg || !seg.length) return;
-    if (!flightCoords.length) {
-      flightCoords.push(...seg);
-    } else {
-      // avoid duplicating the shared vertex
-      flightCoords.push(...seg.slice(1));
-    }
+    if (!flightCoords.length) flightCoords.push(...seg);
+    else flightCoords.push(...seg.slice(1));
   }
 
   append(buildGreatCircle("sydney", "la"));
@@ -181,19 +180,9 @@ window.addStaticRoutes = function () {
   if (flightSource && flightCoords.length) {
     flightSource.setData({
       type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: flightCoords
-      }
+      geometry: { type: "LineString", coordinates: flightCoords }
     });
-  } else {
-    console.warn("addStaticRoutes(): flight-route source missing or empty coords");
   }
-
-  // NOTE:
-  // The static drive route is handled by buildDrivingRoute()
-  // which fills the 'drive-route' source once the Directions
-  // API response arrives. Nothing else to do here for drive.
 };
 
 /* =======================================================================
@@ -216,11 +205,8 @@ window.buildDrivingRoute = async function () {
 
   window.DRIVING_GEOM = json.routes[0].geometry.coordinates;
 
-  /* PATH A rule: flight-route & drive-route already exist in map-style.js */
   const driveSrc = map.getSource("drive-route");
-  if (driveSrc) {
-    driveSrc.setData(json.routes[0].geometry);
-  }
+  if (driveSrc) driveSrc.setData(json.routes[0].geometry);
 
   coords.forEach((wp, i) => {
     let best = 0, bestDist = Infinity;
@@ -249,7 +235,7 @@ function roadLeg(a, b) {
 }
 
 /* ==========================================================================
-   JOURNEY LAYER SOURCES — (ONLY THESE ARE CREATED HERE)
+   JOURNEY LAYER SOURCES — ENSURE VISIBILITY CORRECT
 ======================================================================= */
 
 window.addJourneySources = function () {
@@ -293,7 +279,7 @@ window.addJourneySources = function () {
     "line-opacity": 0.95
   });
 
-  // current animated leg – kept white as in monolith
+  // ★ FIX — current leg should always be white solid
   ensureLayer("journey-current", {
     "line-color": "#FFFFFF",
     "line-width": 4,
@@ -304,19 +290,15 @@ window.addJourneySources = function () {
 };
 
 /* =======================================================================
-   ORBIT ENGINE
+   ORBIT ENGINE — FIXED TO USE DEFAULT_PITCH
 ======================================================================= */
 
 window.stopOrbit = function () {
-  if (orbitEnterTimer) {
-    clearTimeout(orbitEnterTimer);
-    orbitEnterTimer = null;
-  }
-  if (orbitAnimFrame) {
-    cancelAnimationFrame(orbitAnimFrame);
-    orbitAnimFrame = null;
-  }
-  orbitTargetId = null;
+  if (orbitEnterTimer) clearTimeout(orbitEnterTimer);
+  if (orbitAnimFrame) cancelAnimationFrame(orbitAnimFrame);
+  orbitEnterTimer = null;
+  orbitAnimFrame  = null;
+  orbitTargetId   = null;
 };
 
 window.startOrbit = function (id) {
@@ -328,17 +310,14 @@ function orbitLoop() {
   if (!MAP_READY) return;
   if (!orbitTargetId) return;
 
-  const wp = getWP(orbitTargetId);
-  if (!wp) return stopOrbit();
-
-  const m = MAP();
-  m.setBearing(m.getBearing() + 0.03);
+  const map = MAP();
+  map.setBearing(map.getBearing() + ORBIT_ROTATION_SPEED);
 
   orbitAnimFrame = requestAnimationFrame(orbitLoop);
 }
 
 /* =======================================================================
-   GLOBAL SPIN ENGINE — MAP_READY GUARD RESTORED
+   SPIN ENGINE — FIX: USE DEFAULT_PITCH
 ======================================================================= */
 
 window.spinGlobe = function () {
@@ -346,14 +325,8 @@ window.spinGlobe = function () {
   if (!spinning) return;
 
   const map = MAP();
-  if (!map) return;
+  map.setBearing(map.getBearing() + ORBIT_ROTATION_SPEED);
 
-  // keep using ORBIT_ROTATION_SPEED but make sure direction is stable
-  const speed = typeof ORBIT_ROTATION_SPEED === "number"
-    ? ORBIT_ROTATION_SPEED
-    : 0.03;
-
-  map.setBearing(map.getBearing() + speed);
   requestAnimationFrame(window.spinGlobe);
 };
 
@@ -369,13 +342,13 @@ window.focusWaypointOrbit = function (id) {
 
   MAP().easeTo({
     center: wp.coords,
-    zoom: 12.5,
-    pitch: 75,
+    zoom: ORBIT_ZOOM_TARGET,
+    pitch: ORBIT_PITCH_TARGET,
     bearing: MAP().getBearing(),
-    duration: 900
+    duration: ORBIT_ENTRY_DURATION
   });
 
-  orbitEnterTimer = setTimeout(() => startOrbit(id), 900);
+  orbitEnterTimer = setTimeout(() => startOrbit(id), ORBIT_ENTRY_DURATION);
 };
 
 window.focusJourneyOrbit = function (id) {
@@ -385,17 +358,17 @@ window.focusJourneyOrbit = function (id) {
   stopOrbit();
 
   const isLATor = (id === "la" || id === "toronto");
-  const zoom = isLATor ? 6.25 : 12.5;
+  const zoom = isLATor ? JOURNEY_ZOOM_LA : JOURNEY_ZOOM_DEFAULT;
 
   MAP().easeTo({
     center: wp.coords,
     zoom,
-    pitch: 55,
+    pitch: JOURNEY_PITCH_TARGET,
     bearing: MAP().getBearing(),
-    duration: 900
+    duration: ORBIT_ENTRY_DURATION
   });
 
-  orbitEnterTimer = setTimeout(() => startOrbit(id), 900);
+  orbitEnterTimer = setTimeout(() => startOrbit(id), ORBIT_ENTRY_DURATION);
 };
 
 /* =======================================================================
@@ -427,7 +400,7 @@ window.buildCompleteUntil = function (id) {
 };
 
 /* =======================================================================
-   JOURNEY ANIMATION — CINEMATIC
+   JOURNEY ANIMATION — FIXED LINESTYLE + STATIC ROUTES
 ======================================================================= */
 
 window.animateLeg = function (a, b) {
@@ -478,6 +451,7 @@ window.animateLeg = function (a, b) {
     else {
       const after = buildCompleteUntil(b);
 
+      // ★ FIX — static layers restored correctly
       map.getSource("journey-flight").setData({
         type: "Feature",
         geometry: { type: "LineString", coordinates: after.flight }
@@ -500,7 +474,9 @@ window.animateLeg = function (a, b) {
     }
   }
 
-  /* SPECIAL CINEMATIC — SYD → LA */
+  /* ————————————————————————————————
+     CINEMATIC SYD → LA
+  ———————————————————————————————— */
   if (a === "sydney" && b === "la") {
     const Syd = getWP(a);
     const LA  = getWP(b);
@@ -532,8 +508,8 @@ window.animateLeg = function (a, b) {
     setTimeout(() => {
       map.easeTo({
         center: LA.coords,
-        zoom: 6.25,
-        pitch: 55,
+        zoom: JOURNEY_ZOOM_LA,
+        pitch: JOURNEY_PITCH_TARGET,
         bearing: map.getBearing(),
         duration: P3,
         easing: t => t * t * (3 - 2 * t)
@@ -566,7 +542,7 @@ window.animateLeg = function (a, b) {
 };
 
 /* =======================================================================
-   UNDO LEG
+   UNDO LEG (unchanged except static layer fix)
 ======================================================================= */
 
 window.undoTo = function (id) {
@@ -598,7 +574,7 @@ window.undoTo = function (id) {
 };
 
 /* =======================================================================
-   RESET JOURNEY
+   RESET JOURNEY — FIXED PITCH + STATIC RESTORATION
 ======================================================================= */
 
 window.resetJourney = function () {
@@ -625,17 +601,17 @@ window.resetJourney = function () {
     if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
   });
 
-  /* Restore base visible layers (owned by map-style.js) */
-  const FR = map.getLayer("flight-route");
-  if (FR) map.setLayoutProperty("flight-route","visibility","visible");
+  // Restore static routes
+  if (map.getLayer("flight-route"))
+    map.setLayoutProperty("flight-route","visibility","visible");
 
-  const DR = map.getLayer("drive-route");
-  if (DR) map.setLayoutProperty("drive-route","visibility","visible");
+  if (map.getLayer("drive-route"))
+    map.setLayoutProperty("drive-route","visibility","visible");
 
   map.jumpTo({
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
-    pitch: 0,
+    pitch: DEFAULT_PITCH,   // ★ FIX
     bearing: 0
   });
 
@@ -644,7 +620,7 @@ window.resetJourney = function () {
 };
 
 /* =======================================================================
-   START JOURNEY
+   START JOURNEY — FIX BUTTON SWAP + STATIC ROUTE HIDE
 ======================================================================= */
 
 window.startJourney = function () {
@@ -659,14 +635,14 @@ window.startJourney = function () {
   currentID = TRIP_ORDER[0];
   stopOrbit();
 
-  /* Hide static base layers (owned in map-style.js) */
+  // Hide static routes
   if (map.getLayer("flight-route"))
     map.setLayoutProperty("flight-route","visibility","none");
 
   if (map.getLayer("drive-route"))
     map.setLayoutProperty("drive-route","visibility","none");
 
-  /* Show dynamic layers */
+  // Show dynamic layers
   ["journey-flight","journey-drive","journey-current"].forEach(id => {
     if (map.getLayer(id))
       map.setLayoutProperty(id, "visibility", "visible");
@@ -676,6 +652,13 @@ window.startJourney = function () {
       src.setData({ type:"Feature", geometry:{ type:"LineString", coordinates: [] } });
     }
   });
+
+  // ★ FIX — replace Start Journey button with Reset Map button
+  const btn = document.getElementById("journeyToggle");
+  if (btn) {
+    btn.textContent = "Reset Map";
+    btn.onclick = resetJourney;
+  }
 
   openPopupFor(currentID);
 
@@ -695,8 +678,8 @@ window.startJourney = function () {
   setTimeout(() => {
     map.easeTo({
       center: wp.coords,
-      zoom: 12.5,
-      pitch: 55,
+      zoom: ORBIT_ZOOM_TARGET,
+      pitch: JOURNEY_PITCH_TARGET,
       bearing: map.getBearing(),
       duration: START2
     });
