@@ -426,10 +426,24 @@ window.animateLeg = function (a, b) {
     geometry: { type: "LineString", coordinates: comp.drive }
   });
 
+  // Reset the animated pipe
   map.getSource("journey-current").setData({
     type: "Feature",
     geometry: { type: "LineString", coordinates: [] }
   });
+
+  /* ---------------------------------------------------------------
+     ★ FIX — apply correct animated line style BEFORE animation starts
+     --------------------------------------------------------------- */
+  if (isF) {
+    map.setPaintProperty("journey-current", "line-color", "#478ED3");
+    map.setPaintProperty("journey-current", "line-width", 3);
+    map.setPaintProperty("journey-current", "line-dasharray", [3, 2]);
+  } else {
+    map.setPaintProperty("journey-current", "line-color", "#FF9C57");
+    map.setPaintProperty("journey-current", "line-width", 4);
+    map.setPaintProperty("journey-current", "line-dasharray", [1, 0]); // solid
+  }
 
   const duration = isF ? 4200 : 1800;
   const total = seg.length;
@@ -447,11 +461,12 @@ window.animateLeg = function (a, b) {
       geometry: { type: "LineString", coordinates: partial }
     });
 
-    if (p < 1) requestAnimationFrame(animatePolyline);
-    else {
+    if (p < 1) {
+      requestAnimationFrame(animatePolyline);
+    } else {
       const after = buildCompleteUntil(b);
 
-      // ★ FIX — static layers restored correctly
+      // ★ restore completed static geometry after animation
       map.getSource("journey-flight").setData({
         type: "Feature",
         geometry: { type: "LineString", coordinates: after.flight }
@@ -598,7 +613,9 @@ window.resetJourney = function () {
         geometry:{ type:"LineString", coordinates: [] }
       });
     }
-    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, "visibility", "none");
+    }
   });
 
   // Restore static routes
@@ -611,7 +628,7 @@ window.resetJourney = function () {
   map.jumpTo({
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
-    pitch: DEFAULT_PITCH,   // ★ FIX
+    pitch: DEFAULT_PITCH,
     bearing: 0
   });
 
@@ -691,3 +708,4 @@ window.startJourney = function () {
 };
 
 console.log("%cmap-logic.js fully loaded", "color:#00ff88;font-weight:bold;");
+
