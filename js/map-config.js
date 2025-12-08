@@ -86,7 +86,7 @@ window.getCurrencyInfo = function (code) {
 };
 
 /* ============================================================
-   TIMEZONE HELPERS — FIXED (CORRECT TIME + MM/DD/YYYY DATE)
+   TIMEZONE HELPERS — FIXED (CORRECT DAY + DATE + LOCAL TIME)
    ============================================================ */
 
 window.formatLocalTime = function (wp) {
@@ -95,17 +95,15 @@ window.formatLocalTime = function (wp) {
   if (!tz) return "Time unavailable";
 
   try {
-    const now = new Date();
+    const now = new Date(); // current universal moment
 
-    // Local time in waypoint's timezone (12h format)
-    const timeStr = new Intl.DateTimeFormat(locale, {
+    // Weekday in target timezone
+    const weekday = new Intl.DateTimeFormat(locale, {
       timeZone: tz,
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
+      weekday: "long"
     }).format(now);
 
-    // Correct date in MM/DD/YYYY in the waypoint's timezone
+    // Date in MM/DD/YYYY
     const dateStr = new Intl.DateTimeFormat("en-US", {
       timeZone: tz,
       year: "numeric",
@@ -113,10 +111,18 @@ window.formatLocalTime = function (wp) {
       day: "2-digit"
     }).format(now);
 
-    return `${timeStr} — ${dateStr}`;
+    // Correct 12h local time
+    const timeStr = new Intl.DateTimeFormat(locale, {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).format(now);
 
-  } catch (e) {
-    console.error("formatLocalTime() failed:", e);
+    return `${weekday}, ${dateStr} — ${timeStr}`;
+
+  } catch (err) {
+    console.error("formatLocalTime() failed:", err);
     return "Time unavailable";
   }
 };
@@ -140,15 +146,15 @@ window.formatTimeZoneWithOffset = function (wp) {
     const parts = fmt.formatToParts(now);
     let offset = parts.find(p => p.type === "timeZoneName")?.value || "";
 
-    // Convert GMT+X → UTC+X
+    // Normalize GMT → UTC
     if (offset.startsWith("GMT")) {
       offset = "UTC" + offset.slice(3);
     }
 
     return `${tz} (${offset})`;
 
-  } catch (e) {
-    console.error("formatTimeZoneWithOffset() failed:", e);
+  } catch (err) {
+    console.error("formatTimeZoneWithOffset() failed:", err);
     return tz;
   }
 };
@@ -198,3 +204,4 @@ window.CONFIG = {
 };
 
 console.log("%cmap-config.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
