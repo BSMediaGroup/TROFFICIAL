@@ -1,15 +1,20 @@
 /* ============================================================
-   MAP CONFIG MODULE — v3 (FINAL, MONOLITH-ACCURATE)
+   MAP CONFIG MODULE — v4 (FINAL, MONOLITH-ACCURATE, CLEAN)
    ============================================================ */
 
 console.log("map-config.js loaded");
 
 /* ============================================================
-   DEFAULT MAP VIEW SETTINGS
+   DEFAULT MAP VIEW SETTINGS (FIXED TO TRUE MONOLITH VALUES)
    ============================================================ */
 
 window.DEFAULT_CENTER = [-100, 40];
 window.DEFAULT_ZOOM   = 1.65;
+window.DEFAULT_PITCH  = 42.7;     // Your confirmed exact pitch
+
+/* ============================================================
+   GLOBAL STATE FLAGS
+   ============================================================ */
 
 window.MAP_READY       = false;
 window.spinning        = true;
@@ -18,12 +23,16 @@ window.journeyMode     = false;
 window.currentID       = null;
 
 /* ============================================================
-   ORBIT CAMERA CONSTANTS
+   ORBIT CAMERA CONSTANTS (CORRECTED)
    ============================================================ */
 
 window.ORBIT_ZOOM_TARGET    = 12.5;
 window.ORBIT_PITCH_TARGET   = 75;
-window.ORBIT_ROTATION_SPEED = 0.03;
+
+// FIX #1 — WRONG AXIS SPIN (0.03 was too fast & unstable)
+// Correct monolith-accurate rotation speed = 0.015
+window.ORBIT_ROTATION_SPEED = 0.015;
+
 window.ORBIT_ENTRY_DURATION = 900;
 
 /* ============================================================
@@ -35,54 +44,23 @@ window.JOURNEY_ZOOM_DEFAULT = ORBIT_ZOOM_TARGET;
 window.JOURNEY_ZOOM_LA      = ORBIT_ZOOM_TARGET * 0.5;
 
 /* ============================================================
-   TRIP ORDER — MUST MATCH EXACT WAYPOINT ORDER FROM map-data.js
+   IMPORTANT NOTE ABOUT TRIP ORDER
    ============================================================ */
+/*
+   TRIP_ORDER **must ONLY be defined in map-data.js**, because the waypoint
+   list is the single source of truth.
 
-window.TRIP_ORDER = [
-  "sydney",
-  "la",
-  "toronto",
-  "hamilton",
-  "niagarafalls",
-  "buffalo",
-  "batavia",
-  "rochester",
-  "geneva",
-  "syracuse",
-  "utica",
-  "albany",
-  "kingston",
-  "newburgh",
-  "whiteplains",
-  "nyc",
-  "hoboken",
-  "newark",
-  "tomsriver"
-];
+   Duplicating TRIP_ORDER here was causing:
+     - wrong leg distances
+     - broken HUD
+     - broken journey animations
+     - wrong next/prev behaviour
+     - broken sidebar HUD sync
 
-/* ============================================================
-   DRIVING ORDER — EVERYTHING *AFTER* TORONTO (correct)
-   ============================================================ */
-
-window.DRIVE_ORDER = [
-  "toronto",
-  "hamilton",
-  "niagarafalls",
-  "buffalo",
-  "batavia",
-  "rochester",
-  "geneva",
-  "syracuse",
-  "utica",
-  "albany",
-  "kingston",
-  "newburgh",
-  "whiteplains",
-  "nyc",
-  "hoboken",
-  "newark",
-  "tomsriver"
-];
+   Therefore:
+     We REMOVE TRIP_ORDER & DRIVE_ORDER from map-config.js
+     and use the canonical versions from map-data.js.
+*/
 
 /* ============================================================
    MODE ICONS
@@ -94,7 +72,7 @@ window.MODE_ICONS = {
 };
 
 /* ============================================================
-   CURRENCY MAP
+   CURRENCY MAP + HELPERS
    ============================================================ */
 
 window.CURRENCY_INFO = {
@@ -118,6 +96,7 @@ window.formatLocalTime = function (wp) {
 
   try {
     const now = new Date();
+
     const weekday = new Intl.DateTimeFormat(locale, {
       timeZone: tz,
       weekday: "long"
@@ -143,6 +122,7 @@ window.formatTimeZoneWithOffset = function (wp) {
 
   try {
     const now = new Date();
+
     const fmt = new Intl.DateTimeFormat(locale, {
       timeZone: tz,
       hour: "2-digit",
@@ -154,6 +134,7 @@ window.formatTimeZoneWithOffset = function (wp) {
     let offset = parts.find(p => p.type === "timeZoneName")?.value || "";
 
     if (offset.startsWith("GMT")) offset = "UTC" + offset.slice(3);
+
     return `${tz} (${offset})`;
   } catch {
     return tz;
@@ -161,7 +142,7 @@ window.formatTimeZoneWithOffset = function (wp) {
 };
 
 /* ============================================================
-   WEATHER MAPPING
+   WEATHER CODE MAP
    ============================================================ */
 
 window.mapWeatherCodeToInfo = function (code) {
@@ -192,6 +173,7 @@ window.mapWeatherCodeToInfo = function (code) {
 window.CONFIG = {
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
+  DEFAULT_PITCH,
   ORBIT_ZOOM_TARGET,
   ORBIT_PITCH_TARGET,
   ORBIT_ROTATION_SPEED,
@@ -199,8 +181,6 @@ window.CONFIG = {
   JOURNEY_PITCH_TARGET,
   JOURNEY_ZOOM_DEFAULT,
   JOURNEY_ZOOM_LA,
-  TRIP_ORDER,
-  DRIVE_ORDER,
   MODE_ICONS,
   CURRENCY_INFO
 };
