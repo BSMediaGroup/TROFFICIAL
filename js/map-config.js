@@ -86,7 +86,7 @@ window.getCurrencyInfo = function (code) {
 };
 
 /* ============================================================
-   TIMEZONE HELPERS
+   TIMEZONE HELPERS — FIXED (CORRECT TIME + MM/DD/YYYY DATE)
    ============================================================ */
 
 window.formatLocalTime = function (wp) {
@@ -97,23 +97,30 @@ window.formatLocalTime = function (wp) {
   try {
     const now = new Date();
 
-    const weekday = new Intl.DateTimeFormat(locale, {
-      timeZone: tz,
-      weekday: "long"
-    }).format(now);
-
-    const time12h = new Intl.DateTimeFormat(locale, {
+    // Local time in waypoint's timezone (12h format)
+    const timeStr = new Intl.DateTimeFormat(locale, {
       timeZone: tz,
       hour: "numeric",
       minute: "2-digit",
       hour12: true
     }).format(now);
 
-    return `${weekday}, ${time12h}`;
-  } catch {
+    // Correct date in MM/DD/YYYY in the waypoint's timezone
+    const dateStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(now);
+
+    return `${timeStr} — ${dateStr}`;
+
+  } catch (e) {
+    console.error("formatLocalTime() failed:", e);
     return "Time unavailable";
   }
 };
+
 
 window.formatTimeZoneWithOffset = function (wp) {
   const tz = wp.meta?.timezone;
@@ -133,10 +140,15 @@ window.formatTimeZoneWithOffset = function (wp) {
     const parts = fmt.formatToParts(now);
     let offset = parts.find(p => p.type === "timeZoneName")?.value || "";
 
-    if (offset.startsWith("GMT")) offset = "UTC" + offset.slice(3);
+    // Convert GMT+X → UTC+X
+    if (offset.startsWith("GMT")) {
+      offset = "UTC" + offset.slice(3);
+    }
 
     return `${tz} (${offset})`;
-  } catch {
+
+  } catch (e) {
+    console.error("formatTimeZoneWithOffset() failed:", e);
     return tz;
   }
 };
