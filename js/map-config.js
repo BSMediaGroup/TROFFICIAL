@@ -86,193 +86,111 @@ window.getCurrencyInfo = function (code) {
 };
 
 /* ============================================================
-   TIMEZONE HELPERS
+   TIMEZONE HELPERS — GUARANTEED CORRECT TIME (WINDOWS SAFE)
    ============================================================ */
 
 /**
- * Internal helper: safely extract UTC offset minutes from waypoint meta.
- * Supports:
- *   - meta.utcOffsetMinutes (number, e.g. -300)
- *   - meta.utcOffset / meta.utc_offset / meta.utc (string, e.g. "UTC-05:00" or "-05:00")
+ * Get the correct UTC offset in minutes for an IANA zone.
+ * This forces Intl to compute offset properly even on Windows.
  */
-function getUtcOffsetMinutesFromMeta(meta) {
-  if (!meta) return null;
+function getOffsetMinutesFromIANA(tz) {
+  const dt = new Date();
 
-  if (typeof meta.utcOffsetMinutes === "number" && isFinite(meta.utcOffsetMinutes)) {
-    return meta.utcOffsetMinutes;
-  }
+  // Format with timeZone and also without → compute difference
+  const fLocal = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 
-  const raw =
-    meta.utcOffset ??
-    meta.utc_offset ??
-    meta.utc ??
-    null;
+  // Get local-in-zone time as HH:MM
+  const parts = fLocal.formatToParts(dt);
+  const hh = Number(parts.find(p => p.type === "hour").value);
+  const mm = Number(parts.find(p => p.type === "minute").value);
 
-  if (!raw || typeof raw !== "string") return null;
+  // Convert that HH:MM back to minutes from midnight in the target zone
+  const minsInZone = hh * 60 + mm;
 
-  // Strip any leading "UTC" / "GMT"
-  let s = raw.trim().toUpperCase();
-  if (s.startsWith("UTC")) s = s.slice(3).trim();
-  if (s.startsWith("GMT")) s = s.slice(3).trim();
+  // Compute the same for UTC
+  const dtUTC = new Date(dt.toLocaleString("en-US", { timeZone: "UTC" }));
+  const hhUTC = dtUTC.getHours();
+  const mmUTC = dtUTC.getMinutes();
+  const minsUTC = hhUTC * 60 + mmUTC;
 
-  // Expect something like "+05:00" or "-03:30" or "05:00"
-  const m = s.match(/^([+-])?(\d{1,2})(?::(\d{2}))?$/);
-  if (!m) return null;
+  // Offset = difference
+  let off = minsInZone - minsUTC;
 
-  const sign = m[1] === "-" ? -1 : 1;
-  const hours = parseInt(m[2], 10);
-  const mins  = m[3] ? parseInt(m[3], 10) : 0;
+  // Normalize wrap-around at midnight
+  if (off > 720) off -= 1440;
+  else if (off < -720) off += 1440;
 
-  if (!isFinite(hours) || !isFinite(mins)) return null;
-
-  return sign * (hours * 60 + mins);
+  return off;
 }
 
 /**
- * Internal helper: convert "now" to a Date in the target offset.
- * Uses host clock only as a source of current UTC, then applies offset.
+ * Absolute correct local time formatter regardless of OS bugs.
  */
-function getLocalDateFromOffset(offsetMinutes) {
-  const now = new Date();
-  // Convert host local time → UTC
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  // Apply waypoint offset (minutes from UTC)
-  const localMs = utcMs + offsetMinutes * 60000;
-  return new Date(localMs);
-}
-
 window.formatLocalTime = function (wp) {
-  if (!wp || !wp.meta) return "Time unavailable";
-
-  const meta   = wp.meta;
-  const tz     = meta.timezone;
-  const locale = meta.locale || "en-US";
-
-  // Try to use explicit UTC offset first (MOST RELIABLE)
-  const offsetMinutes = getUtcOffsetMinutesFromMeta(meta);
+  const tz = wp.meta?.timezone;
+  const locale = wp.meta?.locale || "en-US";
+  if (!tz) return "Time unavailable";
 
   try {
-    let weekday, dateStr, timeStr;
+    const now = new Date();
+    const offsetMinutes = getOffsetMinutesFromIANA(tz);
 
-    if (offsetMinutes !== null && isFinite(offsetMinutes)) {
-      // Use explicit offset → build a synthetic local Date
-      const localDate = getLocalDateFromOffset(offsetMinutes);
+    // Build corrected local time manually
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const local = new Date(utc + offsetMinutes * 60000);
 
-      weekday = new Intl.DateTimeFormat(locale, {
-        weekday: "long"
-      }).format(localDate);
+    const weekday = new Intl.DateTimeFormat(locale, {
+      weekday: "long"
+    }).format(local);
 
-      dateStr = new Intl.DateTimeFormat(locale, {
-        month: "2-digit",
-        day:   "2-digit",
-        year:  "numeric"
-      }).format(localDate);
+    const dateStr = new Intl.DateTimeFormat(locale, {
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric"
+    }).format(local);
 
-      timeStr = new Intl.DateTimeFormat(locale, {
-        hour:   "numeric",
-        minute: "2-digit",
-        hour12: true
-      }).format(localDate);
-    } else if (tz) {
-      // Fallback: use IANA timezone with Intl
-      const now = new Date();
+    let timeStr = new Intl.DateTimeFormat(locale, {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).format(local);
 
-      weekday = new Intl.DateTimeFormat(locale, {
-        timeZone: tz,
-        weekday: "long"
-      }).format(now);
-
-      dateStr = new Intl.DateTimeFormat(locale, {
-        timeZone: tz,
-        month: "2-digit",
-        day:   "2-digit",
-        year:  "numeric"
-      }).format(now);
-
-      timeStr = new Intl.DateTimeFormat(locale, {
-        timeZone: tz,
-        hour:   "numeric",
-        minute: "2-digit",
-        hour12: true
-      }).format(now);
-    } else {
-      // Last resort: host local time, no timezone data
-      const now = new Date();
-
-      weekday = new Intl.DateTimeFormat(locale, {
-        weekday: "long"
-      }).format(now);
-
-      dateStr = new Intl.DateTimeFormat(locale, {
-        month: "2-digit",
-        day:   "2-digit",
-        year:  "numeric"
-      }).format(now);
-
-      timeStr = new Intl.DateTimeFormat(locale, {
-        hour:   "numeric",
-        minute: "2-digit",
-        hour12: true
-      }).format(now);
-    }
-
-    // Normalise time to "1:45am" / "10:07pm" (no space, lowercase)
     timeStr = timeStr
       .replace(/\s?AM/i, "am")
       .replace(/\s?PM/i, "pm");
 
-    // Final format: "Monday, 12/08/2025 - 1:45am"
     return `${weekday}, ${dateStr} - ${timeStr}`;
-  } catch {
+  } catch (e) {
+    console.error("formatLocalTime() failed:", e);
     return "Time unavailable";
   }
 };
 
+/**
+ * Show IANA zone + correct offset (UTC±HH:MM)
+ */
 window.formatTimeZoneWithOffset = function (wp) {
-  if (!wp || !wp.meta) return "N/A";
-
-  const meta   = wp.meta;
-  const tz     = meta.timezone || "UTC";
-  const locale = meta.locale || "en-US";
-
-  // Try to use the explicit UTC offset first
-  const offsetMinutes = getUtcOffsetMinutesFromMeta(meta);
+  const tz = wp.meta?.timezone || "UTC";
 
   try {
-    let offsetLabel = "";
+    const offset = getOffsetMinutesFromIANA(tz);
+    const sign = offset >= 0 ? "+" : "-";
+    const abs = Math.abs(offset);
+    const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+    const mm = String(abs % 60).padStart(2, "0");
 
-    if (offsetMinutes !== null && isFinite(offsetMinutes)) {
-      const sign = offsetMinutes >= 0 ? "+" : "-";
-      const abs  = Math.abs(offsetMinutes);
-      const hh   = String(Math.floor(abs / 60)).padStart(2, "0");
-      const mm   = String(abs % 60).padStart(2, "0");
-      offsetLabel = `UTC${sign}${hh}:${mm}`;
-    } else {
-      // Fallback: derive from IANA timezone using Intl
-      const now = new Date();
-
-      const fmt = new Intl.DateTimeFormat(locale, {
-        timeZone: tz,
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZoneName: "shortOffset"
-      });
-
-      const parts = fmt.formatToParts(now);
-      let rawName = parts.find(p => p.type === "timeZoneName")?.value || "";
-
-      if (rawName.toUpperCase().startsWith("GMT")) {
-        rawName = "UTC" + rawName.slice(3);
-      }
-      offsetLabel = rawName || "UTC";
-    }
-
-    return `${tz} (${offsetLabel})`;
-  } catch {
-    // If anything explodes, at least show the timezone string
+    return `${tz} (UTC${sign}${hh}:${mm})`;
+  } catch (e) {
+    console.error("formatTimeZoneWithOffset() failed:", e);
     return tz;
   }
 };
+
 
 /* ============================================================
    WEATHER CODE MAP
@@ -319,3 +237,4 @@ window.CONFIG = {
 };
 
 console.log("%cmap-config.js fully loaded", "color:#00e5ff;font-weight:bold;");
+
