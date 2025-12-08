@@ -25,7 +25,6 @@
 ============================================================ -->
 <div id="map"></div>
 
-
 <!-- ============================================================
      OVERLAY / LEGEND PANEL
 ============================================================ -->
@@ -63,9 +62,13 @@
     <div id="legendTotalDistance">Total Distance: calculating…</div>
   </div>
 
+  <!-- Start/Reset Journey BUTTON (same physical button) -->
   <button id="journeyToggle" class="trip-journey-btn">Start Journey</button>
-  <button id="resetStaticMap">Reset Map</button>
 
+  <!-- RESET MAP BUTTON (separate, appears ONLY when static mode is interrupted) -->
+  <button id="resetStaticMap" style="display:none;">Reset Map</button>
+
+  <!-- Legend Toggle -->
   <button id="legendToggle" class="legend-toggle-btn" type="button">
     <img
       id="legendToggleIcon"
@@ -74,7 +77,6 @@
     <span id="legendToggleLabel" class="legend-toggle-label">COLLAPSE</span>
   </button>
 </div>
-
 
 <!-- ============================================================
      JOURNEY HUD
@@ -86,7 +88,6 @@
   </div>
   <div id="hudLabel" class="journey-hud-label"></div>
 </div>
-
 
 <!-- ============================================================
      DETAILS SIDEBAR + OVERLAY
@@ -109,11 +110,11 @@
       </div>
 
       <div id="detailsSidebarLocation" class="details-sidebar-location"></div>
-
       <div id="detailsSidebarDescription" class="details-sidebar-description"></div>
 
       <div class="details-sidebar-divider"></div>
 
+      <!-- Sidebar start journey button -->
       <button id="detailsSidebarStartJourney"
               class="details-sidebar-hud-btn"
               style="display:none; margin-bottom:16px; width:100%;">
@@ -177,18 +178,15 @@
   </div>
 </div>
 
-
 <!-- ============================================================
      SCRIPT MODULE LOADING — FIXED ORDER (MANDATORY)
 ============================================================ -->
-
 <script src="js/map-config.js"></script>
 <script src="js/map-data.js"></script>
 <script src="js/map-style.js"></script>
 <script src="js/map-logic.js"></script>
 <script src="js/map-ui.js"></script>
 <script src="js/map-core.js"></script>
-
 
 </body>
 </html>
